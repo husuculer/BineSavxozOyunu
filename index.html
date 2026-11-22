@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Binə / Binə Sovxoz 3D - Mərhələ 2 (NPC, Pul, Avariya)</title>
+  <title>Binə / Binə Sovxoz 3D - Modulyar Versiya</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -18,13 +18,13 @@
       top: 14px;
       left: 14px;
       z-index: 10;
-      background: rgba(0, 0, 0, 0.72);
+      background: rgba(0, 0, 0, 0.74);
       padding: 12px 14px;
       border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.18);
-      font-size: 13px;
+      font-size: 12.5px;
       line-height: 1.55;
-      max-width: 360px;
+      max-width: 370px;
     }
     #hud strong { color: #ffd166; }
     #statsHud {
@@ -37,41 +37,54 @@
       border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.18);
       text-align: right;
-      min-width: 175px;
+      min-width: 195px;
+    }
+    #wantedStars {
+      font-size: 18px;
+      letter-spacing: 3px;
+      color: #ffd166;
+      margin-bottom: 4px;
     }
     #moneyDisplay {
-      font-size: 22px;
+      font-size: 21px;
       font-weight: bold;
       color: #52b788;
     }
-    #carHpWrap {
+    #hpBarWrap {
       margin-top: 8px;
-      display: none;
     }
-    #carHpLabel {
-      font-size: 12px;
-      color: #f4a261;
-      margin-bottom: 4px;
+    .barLabel {
+      font-size: 11.5px;
+      color: #ddd;
+      margin-bottom: 3px;
     }
-    #carHpBarBg {
+    .barBg {
       width: 100%;
-      height: 8px;
+      height: 7px;
       background: #333;
       border-radius: 4px;
       overflow: hidden;
+      margin-bottom: 6px;
     }
+    #playerHpBar {
+      width: 100%;
+      height: 100%;
+      background: #4cc9f0;
+      transition: width 0.15s;
+    }
+    #carHpWrap { display: none; }
     #carHpBar {
       width: 100%;
       height: 100%;
       background: #52b788;
-      transition: width 0.15s, background 0.15s;
+      transition: width 0.15s;
     }
     #speedBox {
       position: fixed;
       bottom: 20px;
       right: 20px;
       z-index: 10;
-      background: rgba(0, 0, 0, 0.72);
+      background: rgba(0, 0, 0, 0.74);
       padding: 10px 16px;
       border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.18);
@@ -85,7 +98,7 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
-      background: rgba(0, 0, 0, 0.82);
+      background: rgba(0, 0, 0, 0.84);
       padding: 8px 16px;
       border-radius: 6px;
       border: 1px solid #ffd166;
@@ -94,13 +107,13 @@
     }
     #toast {
       position: fixed;
-      top: 95px;
+      top: 145px;
       right: 14px;
       z-index: 10;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.82);
       padding: 7px 12px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12.5px;
       color: #ffd166;
       opacity: 0;
       transition: opacity 0.25s;
@@ -110,18 +123,23 @@
 </head>
 <body>
   <div id="hud">
-    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz</div>
+    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz (Geniş Xəritə)</div>
     <div><strong>Rejim:</strong> <span id="modeLabel">Piyada</span></div>
-    <div><strong>Hərəkət:</strong> W A S D | <strong>Qaçış:</strong> Shift</div>
-    <div><strong>Zərbə (NPC):</strong> E və ya Sağ Klik | <strong>Tormoz:</strong> Space</div>
-    <div><strong>Kamera:</strong> Sol kliklə sürüklə | <strong>Maşın:</strong> F</div>
+    <div><strong>Hərəkət:</strong> W A S D | <strong>Qaçış:</strong> Shift | <strong>Tullanma:</strong> Space</div>
+    <div><strong>Vurma (NPC):</strong> Sol Klik | <strong>Kamera:</strong> Sağ Klik sürüklə</div>
+    <div><strong>Maşın:</strong> F (min/düş) | <strong>Əl əyləci:</strong> Space (maşında)</div>
   </div>
 
   <div id="statsHud">
+    <div id="wantedStars">☆☆☆☆☆</div>
     <div id="moneyDisplay">0 AZN</div>
-    <div id="carHpWrap">
-      <div id="carHpLabel">Maşın Vəziyyəti: <span id="carHpText">100%</span></div>
-      <div id="carHpBarBg"><div id="carHpBar"></div></div>
+    <div id="hpBarWrap">
+      <div class="barLabel">Can: <span id="playerHpText">100%</span></div>
+      <div class="barBg"><div id="playerHpBar"></div></div>
+      <div id="carHpWrap">
+        <div class="barLabel">Maşın: <span id="carHpText">100%</span></div>
+        <div class="barBg"><div id="carHpBar"></div></div>
+      </div>
     </div>
   </div>
 
@@ -139,143 +157,18 @@
 
   <script type="module">
     import * as THREE from 'three';
+    import { createDetailedHuman } from './character.js';
+    import { NpcManager } from './npc.js';
+    import { createDetailedCar } from './vehicles.js';
 
     // ==========================================
-    // 1. İNSAN MODELİ MODULU (OYUNÇU VƏ NPC-LƏR)
-    // ==========================================
-    function createHumanCharacter(options = {}) {
-      const shirtColor = options.shirtColor ?? 0x1d3557;
-      const pantsColor = options.pantsColor ?? 0x2b2d42;
-      const skinColor  = options.skinColor  ?? 0xe0ac69;
-      const hairColor  = options.hairColor  ?? 0x1a1a1a;
-      const shoeColor  = options.shoeColor  ?? 0x111111;
-
-      const root = new THREE.Group();
-
-      const skinMat  = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 });
-      const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
-      const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.85 });
-      const hairMat  = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 });
-      const shoeMat  = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.6 });
-
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.28), shirtMat);
-      torso.position.y = 1.16;
-      torso.castShadow = true;
-      root.add(torso);
-
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 10), skinMat);
-      neck.position.y = 1.55;
-      root.add(neck);
-
-      const headGroup = new THREE.Group();
-      headGroup.position.y = 1.76;
-
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.32), skinMat);
-      head.castShadow = true;
-      headGroup.add(head);
-
-      const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.35), hairMat);
-      hairTop.position.set(0, 0.17, -0.01);
-      headGroup.add(hairTop);
-
-      const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.08), hairMat);
-      hairBack.position.set(0, 0.05, -0.14);
-      headGroup.add(hairBack);
-
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-      const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), eyeMat);
-      leftEye.position.set(-0.07, 0.03, 0.165);
-      const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), eyeMat);
-      rightEye.position.set(0.07, 0.03, 0.165);
-      headGroup.add(leftEye, rightEye);
-
-      root.add(headGroup);
-
-      function makeArm(side) {
-        const pivot = new THREE.Group();
-        pivot.position.set(side * 0.34, 1.46, 0);
-
-        const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.28, 0.16), shirtMat);
-        sleeve.position.y = -0.12;
-        sleeve.castShadow = true;
-        pivot.add(sleeve);
-
-        const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.34, 0.14), skinMat);
-        forearm.position.y = -0.41;
-        forearm.castShadow = true;
-        pivot.add(forearm);
-
-        return pivot;
-      }
-
-      const leftArm = makeArm(-1);
-      const rightArm = makeArm(1);
-      root.add(leftArm, rightArm);
-
-      function makeLeg(side) {
-        const pivot = new THREE.Group();
-        pivot.position.set(side * 0.14, 0.82, 0);
-
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.72, 0.21), pantsMat);
-        leg.position.y = -0.36;
-        leg.castShadow = true;
-        pivot.add(leg);
-
-        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.11, 0.3), shoeMat);
-        shoe.position.set(0, -0.76, 0.04);
-        shoe.castShadow = true;
-        pivot.add(shoe);
-
-        return pivot;
-      }
-
-      const leftLeg = makeLeg(-1);
-      const rightLeg = makeLeg(1);
-      root.add(leftLeg, rightLeg);
-
-      let walkPhase = Math.random() * 6;
-      let punchTimer = 0;
-
-      root.userData.triggerPunch = () => {
-        punchTimer = 0.28;
-      };
-
-      root.userData.updateAnimation = (dt, speedRatio) => {
-        if (punchTimer > 0) {
-          punchTimer -= dt;
-          rightArm.rotation.x = -Math.PI * 0.65;
-          leftArm.rotation.x = 0.2;
-          return;
-        }
-
-        if (speedRatio > 0.05) {
-          walkPhase += dt * (7 + speedRatio * 7);
-          const swing = Math.sin(walkPhase) * (0.45 + speedRatio * 0.35);
-          leftLeg.rotation.x = swing;
-          rightLeg.rotation.x = -swing;
-          leftArm.rotation.x = -swing * 0.85;
-          rightArm.rotation.x = swing * 0.85;
-          torso.position.y = 1.16 + Math.abs(Math.cos(walkPhase)) * 0.03;
-        } else {
-          leftLeg.rotation.x *= 0.75;
-          rightLeg.rotation.x *= 0.75;
-          leftArm.rotation.x *= 0.75;
-          rightArm.rotation.x *= 0.75;
-          torso.position.y = 1.16;
-        }
-      };
-
-      return root;
-    }
-
-    // ==========================================
-    // 2. SƏHNƏ VƏ İŞIQLANDIRMA
+    // 1. SƏHNƏ VƏ İŞIQLANDIRMA
     // ==========================================
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x8ecae6);
-    scene.fog = new THREE.Fog(0x8ecae6, 115, 300);
+    scene.fog = new THREE.Fog(0x8ecae6, 130, 360);
 
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 400);
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 480);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -287,21 +180,21 @@
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));
 
     const dirLight = new THREE.DirectionalLight(0xfff3d1, 1.15);
-    dirLight.position.set(80, 120, 60);
+    dirLight.position.set(100, 140, 80);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
     dirLight.shadow.mapSize.height = 1024;
-    const shadowArea = 150;
+    const shadowArea = 180;
     dirLight.shadow.camera.left = -shadowArea;
     dirLight.shadow.camera.right = shadowArea;
     dirLight.shadow.camera.top = shadowArea;
     dirLight.shadow.camera.bottom = -shadowArea;
     dirLight.shadow.camera.near = 10;
-    dirLight.shadow.camera.far = 320;
+    dirLight.shadow.camera.far = 380;
     scene.add(dirLight);
 
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(520, 520),
+      new THREE.PlaneGeometry(720, 720),
       new THREE.MeshStandardMaterial({ color: 0xa69b82, roughness: 0.96 })
     );
     ground.rotation.x = -Math.PI / 2;
@@ -325,8 +218,19 @@
       return mesh;
     }
 
+    function collidesAt(pos, radius = 0.45) {
+      const box = new THREE.Box3(
+        new THREE.Vector3(pos.x - radius, 0.1, pos.z - radius),
+        new THREE.Vector3(pos.x + radius, 2.0, pos.z + radius)
+      );
+      for (const cBox of colliders) {
+        if (box.intersectsBox(cBox)) return true;
+      }
+      return false;
+    }
+
     // ==========================================
-    // 3. BİNƏ / BİNƏ SOVXOZ MƏHƏLLƏ VƏ YOLLAR
+    // 2. BÖYÜDÜLMÜŞ BİNƏ / BİNƏ SOVXOZ XƏRİTƏSİ
     // ==========================================
     const roadMat = new THREE.MeshStandardMaterial({ color: 0x2c3035, roughness: 0.9 });
     const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x8d9299, roughness: 0.9 });
@@ -365,11 +269,9 @@
       }
     }
 
-    const hRoads = [-120, -60, 0, 60, 120];
-    const vRoads = [-120, -60, 0, 60, 120];
-
-    for (const rz of hRoads) addRoad(0, rz, 340, rz === 0 ? 14 : 11, true);
-    for (const rx of vRoads) addRoad(rx, 0, rx === 0 ? 14 : 11, 340, false);
+    const roadCoords = [-180, -120, -60, 0, 60, 120, 180];
+    for (const rz of roadCoords) addRoad(0, rz, 440, rz === 0 ? 14 : 11, true);
+    for (const rx of roadCoords) addRoad(rx, 0, rx === 0 ? 14 : 11, 440, false);
 
     const stoneColors = [0xd9cfb8, 0xcfc1a5, 0xdfd7c5, 0xc3b393, 0xb8aa8e];
     const roofColors  = [0x7a3b2e, 0x4b5259, 0x8c4a32, 0x3b4d3b];
@@ -393,11 +295,6 @@
       scene.add(crown);
     }
 
-    function addLightPole(x, z) {
-      addBox(0.22, 6.2, 0.22, x, 3.1, z, 0x555b61, true, false, true);
-      addBox(1.2, 0.15, 0.2, x + 0.5, 6.1, z, 0x777e85, false, false, false);
-    }
-
     function addCompoundHouse(cx, cz, lotW, lotD, seed) {
       const wallCol = stoneColors[seed % stoneColors.length];
       const roofCol = roofColors[(seed * 3) % roofColors.length];
@@ -406,19 +303,11 @@
       const houseW = lotW * 0.56;
       const houseD = lotD * 0.52;
       const houseH = 4.2 + (seed % 3) * 1.4;
-
-      const hx = cx + ((seed % 2 === 0) ? -1.5 : 1.5);
+      const hx = cx + ((seed % 2 === 0) ? -1.4 : 1.4);
       const hz = cz - lotD * 0.14;
 
       addBox(houseW, houseH, houseD, hx, houseH / 2, hz, wallCol);
       addBox(houseW + 0.6, 0.55, houseD + 0.6, hx, houseH + 0.27, hz, roofCol, true, true, false);
-
-      const winMat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.2 });
-      const win1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 0.1), winMat);
-      win1.position.set(hx - houseW * 0.22, 2.2, hz + houseD / 2 + 0.03);
-      const win2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 0.1), winMat);
-      win2.position.set(hx + houseW * 0.22, 2.2, hz + houseD / 2 + 0.03);
-      scene.add(win1, win2);
 
       const fenceH = 2.0;
       const thick = 0.45;
@@ -438,27 +327,30 @@
       addTree(cx - halfW + 2.3, cz + halfD - 2.5);
     }
 
-    const centers = [-90, -30, 30, 90];
-    let seedCounter = 1;
-
-    for (const bx of centers) {
-      for (const bz of centers) {
-        addCompoundHouse(bx - 11.5, bz - 11.5, 20, 20, seedCounter++);
-        addCompoundHouse(bx + 11.5, bz - 11.5, 20, 20, seedCounter++);
-        addCompoundHouse(bx - 11.5, bz + 11.5, 20, 20, seedCounter++);
-        addCompoundHouse(bx + 11.5, bz + 11.5, 20, 20, seedCounter++);
-
-        addLightPole(bx - 21, bz - 21);
-        addTree(bx + 21.5, bz - 21.5);
+    const blockCenters = [-150, -90, -30, 30, 90, 150];
+    let seed = 1;
+    for (const bx of blockCenters) {
+      for (const bz of blockCenters) {
+        addCompoundHouse(bx - 11.5, bz - 11.5, 20, 20, seed++);
+        addCompoundHouse(bx + 11.5, bz - 11.5, 20, 20, seed++);
+        addCompoundHouse(bx - 11.5, bz + 11.5, 20, 20, seed++);
+        addCompoundHouse(bx + 11.5, bz + 11.5, 20, 20, seed++);
       }
     }
 
     // ==========================================
-    // 4. PUL (AZN) VƏ HİSSƏCİK (AVARİYA) SİSTEMİ
+    // 3. PUL, ULDUZ (WANTED) VƏ HİSSƏCİKLƏR
     // ==========================================
     let playerMoney = 0;
-    const moneyDisplay = document.getElementById('moneyDisplay');
-    const toastEl = document.getElementById('toast');
+    let playerHp = 100;
+    let wantedLevel = 0;
+    let wantedDecayTimer = 0;
+
+    const wantedStarsEl = document.getElementById('wantedStars');
+    const moneyDisplay  = document.getElementById('moneyDisplay');
+    const playerHpText  = document.getElementById('playerHpText');
+    const playerHpBar   = document.getElementById('playerHpBar');
+    const toastEl       = document.getElementById('toast');
     let toastTimer = null;
 
     function showToast(msg) {
@@ -468,15 +360,38 @@
       toastTimer = setTimeout(() => { toastEl.style.opacity = '0'; }, 1800);
     }
 
+    function updateWantedUI() {
+      wantedStarsEl.textContent = '★'.repeat(wantedLevel) + '☆'.repeat(5 - wantedLevel);
+    }
+
+    function addWanted(amount) {
+      wantedLevel = Math.min(5, wantedLevel + amount);
+      wantedDecayTimer = 14;
+      updateWantedUI();
+    }
+
+    function damagePlayer(dmg) {
+      playerHp = Math.max(0, playerHp - dmg);
+      playerHpText.textContent = `${playerHp}%`;
+      playerHpBar.style.width = `${playerHp}%`;
+      if (playerHp <= 0) {
+        playerHp = 100;
+        playerHpText.textContent = '100%';
+        playerHpBar.style.width = '100%';
+        wantedLevel = 0;
+        updateWantedUI();
+        player.position.set(4, 0, 8);
+        showToast('Xəstəxana/Baza: Ulduzlar sıfırlandı');
+      }
+    }
+
     const cashDrops = [];
     const cashGeo = new THREE.BoxGeometry(0.65, 0.06, 0.32);
     const cashMat = new THREE.MeshStandardMaterial({ color: 0x2d9e54, emissive: 0x134e27, roughness: 0.4 });
 
     function spawnCash(x, z) {
-      // ~65% ehtimalla pul düşür, ~35% ehtimalla düşmür
       if (Math.random() > 0.65) return;
-
-      const amount = (Math.floor(Math.random() * 7) + 1) * 5; // 5 - 35 AZN
+      const amount = (Math.floor(Math.random() * 7) + 1) * 5;
       const mesh = new THREE.Mesh(cashGeo, cashMat);
       mesh.position.set(x, 0.45, z);
       mesh.castShadow = true;
@@ -484,7 +399,6 @@
       cashDrops.push({ mesh, amount });
     }
 
-    // Avariya qığılcım və tüstü hissəcikləri
     const particles = [];
     let cameraShake = 0;
 
@@ -500,12 +414,11 @@
         pMesh.position.copy(pos);
         pMesh.position.y += 0.8;
         scene.add(pMesh);
-
         particles.push({
           mesh: pMesh,
           vel: new THREE.Vector3(
             (Math.random() - 0.5) * 9 * intensity,
-            (Math.random() * 4 + 2),
+            Math.random() * 4 + 2,
             (Math.random() - 0.5) * 9 * intensity
           ),
           life: 0.45 + Math.random() * 0.35,
@@ -515,9 +428,9 @@
     }
 
     // ==========================================
-    // 5. OYUNÇU VƏ EYNİ İNSAN MODELLİ NPC-LƏR
+    // 4. OYUNÇU, NPC MODULU VƏ MAŞINLAR
     // ==========================================
-    const player = createHumanCharacter({
+    const player = createDetailedHuman({
       shirtColor: 0x1e6091,
       pantsColor: 0x1b263b,
       skinColor:  0xe0ac69,
@@ -526,165 +439,67 @@
     player.position.set(4, 0, 8);
     scene.add(player);
 
-    const npcs = [];
-    const npcOutfits = [
-      { shirt: 0xe63946, pants: 0x1d3557, hair: 0x111111 },
-      { shirt: 0xf4a261, pants: 0x264653, hair: 0x3d2314 },
-      { shirt: 0x2a9d8f, pants: 0x2b2d42, hair: 0x1a1a1a },
-      { shirt: 0x6d597a, pants: 0x1f2421, hair: 0x4a3525 },
-      { shirt: 0x457b9d, pants: 0x333533, hair: 0x0d0d0d },
-      { shirt: 0xe9c46a, pants: 0x22223b, hair: 0x2b1d0e }
+    let playerVy = 0;
+
+    const npcManager = new NpcManager(scene, collidesAt);
+    const npcSpots = [
+      [-45, 8], [-15, -8], [18, 8], [42, -8], [-8, 35], [8, -42],
+      [-68, 25], [68, -28], [-52, 68], [52, -68], [-22, 52], [25, -52],
+      [-85, -8], [85, 8], [-8, -85], [8, 85], [-112, 15], [112, -15],
+      [-140, 65], [140, -65], [95, 125], [-95, -125]
     ];
+    npcManager.populateInitial(npcSpots);
 
-    const sidewalkSpots = [
-      [-45, 8], [-15, -8], [18, 8], [42, -8],
-      [-8, 35], [8, -42], [-68, 25], [68, -28],
-      [-52, 68], [52, -68], [-22, 52], [25, -52],
-      [-85, -8], [85, 8], [-8, -85], [8, 85],
-      [-112, 15], [112, -15]
-    ];
-
-    function spawnNpc(x, z, idx) {
-      const style = npcOutfits[idx % npcOutfits.length];
-      const mesh = createHumanCharacter({
-        shirtColor: style.shirt,
-        pantsColor: style.pants,
-        hairColor:  style.hair
-      });
-      mesh.position.set(x, 0, z);
-      scene.add(mesh);
-
-      npcs.push({
-        mesh,
-        hp: 100,
-        dead: false,
-        deathTimer: 0,
-        respawnTimer: 0,
-        spawnPos: new THREE.Vector3(x, 0, z),
-        dirAngle: Math.random() * Math.PI * 2,
-        turnTimer: 1 + Math.random() * 3,
-        speed: 2.1 + Math.random() * 0.9
-      });
-    }
-
-    sidewalkSpots.forEach(([sx, sz], i) => spawnNpc(sx, sz, i));
-
-    function killNpc(npc, knockDir) {
-      if (npc.dead) return;
-      npc.dead = true;
-      npc.deathTimer = 0;
-      npc.respawnTimer = 14; // 14 saniyə sonra başqa yerdən yenidən çıxır
-      npc.mesh.rotation.x = -Math.PI / 2;
-      npc.mesh.position.y = 0.22;
-      if (knockDir) {
-        npc.mesh.position.addScaledVector(knockDir, 0.9);
-      }
-      spawnCash(npc.mesh.position.x, npc.mesh.position.z);
-    }
-
-    // ==========================================
-    // 6. AVTOMOBİLLƏR VƏ TRAFİK (AI SÜRÜCÜLƏR)
-    // ==========================================
-    function createCar(x, z, yaw, bodyColor, isTraffic = false) {
-      const car = new THREE.Group();
-
-      const chassisMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.35, metalness: 0.25 });
-      const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.85, 4.3), chassisMat);
-      chassis.position.y = 0.75;
-      chassis.castShadow = true;
-      car.add(chassis);
-
-      // Ön kapot (avariya olanda əzilir/qaralır)
-      const hoodMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.25 });
-      const hood = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.22, 1.25), hoodMat);
-      hood.position.set(0, 1.18, 1.48);
-      hood.castShadow = true;
-      car.add(hood);
-
-      const cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.75, 0.65, 2.1),
-        new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.2, metalness: 0.5 })
-      );
-      cabin.position.set(0, 1.45, -0.2);
-      cabin.castShadow = true;
-      car.add(cabin);
-
-      const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfff3b0 });
-      const hl1 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.08), headlightMat);
-      hl1.position.set(-0.68, 0.8, 2.16);
-      const hl2 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.08), headlightMat);
-      hl2.position.set(0.68, 0.8, 2.16);
-      car.add(hl1, hl2);
-
-      const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 12);
-      wheelGeo.rotateZ(Math.PI / 2);
-      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 });
-
-      const wheelCoords = [
-        [-1.1, 0.42, 1.35],
-        [1.1, 0.42, 1.35],
-        [-1.1, 0.42, -1.35],
-        [1.1, 0.42, -1.35]
-      ];
-      for (const [wx, wy, wz] of wheelCoords) {
-        const w = new THREE.Mesh(wheelGeo, wheelMat);
-        w.position.set(wx, wy, wz);
-        w.castShadow = true;
-        car.add(w);
-      }
-
-      car.position.set(x, 0, z);
-      car.rotation.y = yaw;
-      car.userData = {
-        speed: isTraffic ? 9.5 : 0,
-        hp: 100,
-        maxHp: 100,
-        wrecked: false,
-        isTraffic,
-        baseColor: bodyColor,
-        hood,
-        hoodMat,
-        chassisMat,
-        knockVel: new THREE.Vector3(),
-        smokeTimer: 0
-      };
+    const cars = [];
+    function registerCar(car) {
       scene.add(car);
+      cars.push(car);
       return car;
     }
 
-    const cars = [
-      createCar(12, 3.2, Math.PI / 2, 0xd62828, false),
-      createCar(-24, -3.2, -Math.PI / 2, 0xf77f00, false),
-      // Yolda hərəkət edən trafik maşınları (avariya üçün)
-      createCar(-90, 3.2, Math.PI / 2, 0xe9c46a, true),
-      createCar(95, -3.2, -Math.PI / 2, 0x2a9d8f, true),
-      createCar(3.2, -90, 0, 0x457b9d, true),
-      createCar(-3.2, 95, Math.PI, 0xadb5bd, true),
-      createCar(63.2, -60, 0, 0x9b5de5, true),
-      createCar(-63.2, 60, Math.PI, 0xf15bb5, true)
-    ];
+    registerCar(createDetailedCar(12, 3.2, Math.PI / 2, { bodyColor: 0xd62828 }));
+    registerCar(createDetailedCar(-24, -3.2, -Math.PI / 2, { bodyColor: 0xf77f00 }));
+    registerCar(createDetailedCar(-90, 3.2, Math.PI / 2, { bodyColor: 0xe9c46a, isTraffic: true }));
+    registerCar(createDetailedCar(95, -3.2, -Math.PI / 2, { bodyColor: 0x2a9d8f, isTraffic: true }));
+    registerCar(createDetailedCar(3.2, -90, 0, { bodyColor: 0x457b9d, isTraffic: true }));
+    registerCar(createDetailedCar(-3.2, 95, Math.PI, { bodyColor: 0xadb5bd, isTraffic: true }));
+    registerCar(createDetailedCar(123.2, -60, 0, { bodyColor: 0x9b5de5, isTraffic: true }));
+    registerCar(createDetailedCar(-123.2, 60, Math.PI, { bodyColor: 0xf15bb5, isTraffic: true }));
+
+    let policeSpawnCooldown = 0;
+
+    function spawnPoliceUnit(nearPos) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 36 + Math.random() * 14;
+      const sx = Math.max(-195, Math.min(195, nearPos.x + Math.cos(angle) * dist));
+      const sz = Math.max(-195, Math.min(195, nearPos.z + Math.sin(angle) * dist));
+
+      const pCar = registerCar(createDetailedCar(sx, sz, Math.atan2(nearPos.x - sx, nearPos.z - sz), {
+        isPolice: true,
+        isTraffic: false
+      }));
+      pCar.userData.isPoliceChaser = true;
+
+      npcManager.spawnNpc(sx + 2.2, sz, 0, true);
+    }
 
     function applyCarDamage(car, damage, impactPoint, pushVec) {
       const d = car.userData;
       if (d.wrecked) return;
 
       d.hp = Math.max(0, d.hp - damage);
-      if (pushVec) {
-        d.knockVel.add(pushVec);
-      }
-
+      if (pushVec) d.knockVel.add(pushVec);
       spawnCrashEffect(impactPoint, Math.min(2.2, damage / 18));
 
-      // Vizual əzilmə: kapot əyilir və rəngi tündləşir
       const dmgRatio = 1 - d.hp / d.maxHp;
       d.hood.rotation.x = -dmgRatio * 0.28;
-      d.hood.position.y = 1.18 + dmgRatio * 0.08;
+      d.hood.position.y = 0.94 + dmgRatio * 0.08;
       d.hoodMat.color.setHex(d.baseColor).lerp(new THREE.Color(0x222222), dmgRatio * 0.65);
 
       if (d.hp <= 0) {
         d.wrecked = true;
         d.speed = 0;
-        d.chassisMat.color.setHex(0x1f1f1f);
+        d.mainMat.color.setHex(0x1f1f1f);
         d.hoodMat.color.setHex(0x111111);
         if (car === inCar) {
           showToast('Maşın sıradan çıxdı! Düşüb başqa maşına min (F).');
@@ -693,13 +508,13 @@
     }
 
     // ==========================================
-    // 7. İDARƏETMƏ VƏ KAMERA
+    // 5. İDARƏETMƏ: SOL KLİK VURMA, SAĞ KLİK KAMERA
     // ==========================================
     const keys = {};
     let inCar = null;
     let camYaw = 0;
     let camPitch = 0.32;
-    let isDragging = false;
+    let isRightDragging = false;
     let lastMouse = { x: 0, y: 0 };
 
     const modeLabel = document.getElementById('modeLabel');
@@ -710,23 +525,25 @@
     const carHpText = document.getElementById('carHpText');
     const carHpBar  = document.getElementById('carHpBar');
 
-    function performPunch() {
+    function performLeftClickAttack() {
       if (inCar) return;
-      player.userData.triggerPunch();
+      player.userData.triggerAttack();
       const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
 
-      for (const npc of npcs) {
+      for (const npc of npcManager.npcs) {
         if (npc.dead) continue;
         const toNpc = npc.mesh.position.clone().sub(player.position);
+        toNpc.y = 0;
         const dist = toNpc.length();
-        if (dist < 2.2) {
+        if (dist < 2.35) {
           toNpc.normalize();
-          if (forward.dot(toNpc) > 0.25) {
-            npc.hp -= 50;
-            npc.mesh.position.addScaledVector(forward, 0.45);
-            if (npc.hp <= 0) {
-              killNpc(npc, forward);
-            }
+          if (forward.dot(toNpc) > 0.2) {
+            addWanted(1);
+            npcManager.alertNearby(npc.mesh.position, player.position, wantedLevel);
+            npcManager.damageNpc(npc, 50, forward, (killedNpc, kDir) => {
+              addWanted(1);
+              spawnCash(killedNpc.mesh.position.x, killedNpc.mesh.position.z);
+            });
           }
         }
       }
@@ -735,17 +552,19 @@
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       keys[k] = true;
-      if (e.code === 'Space') keys['space'] = true;
-
-      if (k === 'e') {
-        performPunch();
+      if (e.code === 'Space') {
+        keys['space'] = true;
+        if (!inCar && player.position.y <= 0.001 && playerVy === 0) {
+          playerVy = 6.8; // Piyada tullanması
+        }
       }
 
       if (k === 'f') {
         if (inCar) {
-          const exitOffset = new THREE.Vector3(-2.3, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), inCar.rotation.y);
+          const exitOffset = new THREE.Vector3(-2.4, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), inCar.rotation.y);
           player.position.copy(inCar.position).add(exitOffset);
           player.position.y = 0;
+          playerVy = 0;
           player.visible = true;
           inCar = null;
           modeLabel.textContent = 'Piyada';
@@ -753,7 +572,7 @@
           carHpWrap.style.display = 'none';
         } else {
           let nearest = null;
-          let minDist = 4.3;
+          let minDist = 4.4;
           for (const c of cars) {
             if (c.userData.wrecked) continue;
             const dist = player.position.distanceTo(c.position);
@@ -764,7 +583,7 @@
           }
           if (nearest) {
             inCar = nearest;
-            inCar.userData.isTraffic = false; // Oyunçu mindikdə trafik AI dayanır
+            inCar.userData.isTraffic = false;
             player.visible = false;
             modeLabel.textContent = 'Maşında';
             speedBox.style.display = 'block';
@@ -782,62 +601,78 @@
 
     window.addEventListener('blur', () => {
       for (const k in keys) keys[k] = false;
+      isRightDragging = false;
     });
 
-    renderer.domElement.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      performPunch();
-    });
+    renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
     renderer.domElement.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
-        isDragging = true;
+        performLeftClickAttack();
+      } else if (e.button === 2) {
+        isRightDragging = true;
         lastMouse.x = e.clientX;
         lastMouse.y = e.clientY;
       }
     });
 
-    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) isRightDragging = false;
+    });
 
     window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
+      if (!isRightDragging) return;
       const dx = e.clientX - lastMouse.x;
       const dy = e.clientY - lastMouse.y;
       lastMouse.x = e.clientX;
       lastMouse.y = e.clientY;
 
-      camYaw -= dx * 0.006;
-      camPitch = Math.max(0.08, Math.min(1.1, camPitch + dy * 0.005));
+      camYaw -= dx * 0.0065;
+      camPitch = Math.max(0.08, Math.min(1.15, camPitch + dy * 0.005));
     });
 
-    function collidesAt(pos, radius = 0.45) {
-      const box = new THREE.Box3(
-        new THREE.Vector3(pos.x - radius, 0.1, pos.z - radius),
-        new THREE.Vector3(pos.x + radius, 2.0, pos.z + radius)
-      );
-      for (const cBox of colliders) {
-        if (box.intersectsBox(cBox)) return true;
-      }
-      return false;
-    }
-
+    // ==========================================
+    // 6. OYUN DÖVRÜ (ANIMATION LOOP)
+    // ==========================================
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
 
+      // Ulduzların vaxtla sönməsi
+      if (wantedLevel > 0) {
+        wantedDecayTimer -= dt;
+        if (wantedDecayTimer <= 0) {
+          wantedLevel = Math.max(0, wantedLevel - 1);
+          wantedDecayTimer = 14;
+          updateWantedUI();
+        }
+      }
+
+      // Polis maşınlarının yaranması
+      if (wantedLevel > 0) {
+        policeSpawnCooldown -= dt;
+        const activePoliceCars = cars.filter(c => c.userData.isPoliceChaser && !c.userData.wrecked).length;
+        const maxPoliceCars = Math.min(4, wantedLevel);
+        if (policeSpawnCooldown <= 0 && activePoliceCars < maxPoliceCars) {
+          const targetPos = inCar ? inCar.position : player.position;
+          spawnPoliceUnit(targetPos);
+          policeSpawnCooldown = 4.5;
+        }
+      }
+
       const forwardInput = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
       const turnInput    = (keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
       const isRunning    = Boolean(keys['shift']);
       const isBraking    = Boolean(keys['space']);
 
-      // 1. Oyunçu hərəkəti
+      // Oyunçu hərəkəti
       if (!inCar) {
         let speedRatio = 0;
-        const moveSpeed = isRunning ? 10.5 : 5.8;
+        const moveSpeed = isRunning ? 10.8 : 6.0;
 
-        if ((forwardInput !== 0 || turnInput !== 0) && !isBraking) {
+        if (forwardInput !== 0 || turnInput !== 0) {
           const moveDir = new THREE.Vector3(
             -Math.sin(camYaw) * forwardInput + Math.cos(camYaw) * (-turnInput),
             0,
@@ -846,37 +681,50 @@
           if (moveDir.lengthSq() > 0) {
             moveDir.normalize();
             const nextPos = player.position.clone().addScaledVector(moveDir, moveSpeed * dt);
-            nextPos.x = Math.max(-165, Math.min(165, nextPos.x));
-            nextPos.z = Math.max(-165, Math.min(165, nextPos.z));
+            nextPos.x = Math.max(-215, Math.min(215, nextPos.x));
+            nextPos.z = Math.max(-215, Math.min(215, nextPos.z));
 
             if (!collidesAt(nextPos, 0.42)) {
-              player.position.copy(nextPos);
+              player.position.x = nextPos.x;
+              player.position.z = nextPos.z;
               speedRatio = isRunning ? 1.0 : 0.55;
             }
             player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
           }
         }
 
-        player.userData.updateAnimation(dt, speedRatio);
+        // Cazibə qüvvəsi və tullanma
+        if (player.position.y > 0 || playerVy !== 0) {
+          playerVy -= 17.5 * dt;
+          player.position.y += playerVy * dt;
+          if (player.position.y <= 0) {
+            player.position.y = 0;
+            playerVy = 0;
+          }
+        }
+
+        player.userData.updatePose(dt, {
+          speedRatio,
+          isAirborne: player.position.y > 0.02
+        });
 
         let canEnter = false;
         for (const c of cars) {
-          if (!c.userData.wrecked && player.position.distanceTo(c.position) < 4.3) {
+          if (!c.userData.wrecked && player.position.distanceTo(c.position) < 4.4) {
             canEnter = true;
             break;
           }
         }
         promptEl.style.display = canEnter ? 'block' : 'none';
       } else {
-        // Oyunçunun sürdüyü maşın
         promptEl.style.display = 'none';
         const data = inCar.userData;
 
         if (!data.wrecked) {
-          const accel = 26;
-          const maxSpeed = 30;
+          const accel = 27;
+          const maxSpeed = 32;
           const naturalFriction = 14;
-          const handbrakeForce = 48;
+          const handbrakeForce = 50;
 
           if (isBraking) {
             data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), handbrakeForce * dt);
@@ -885,17 +733,17 @@
             else data.speed += accel * dt;
           } else if (forwardInput < 0) {
             if (data.speed > 0) data.speed -= handbrakeForce * dt;
-            else data.speed -= accel * 0.8 * dt;
+            else data.speed -= accel * 0.85 * dt;
           } else {
             data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), naturalFriction * dt);
           }
 
           if (Math.abs(data.speed) < 0.08 && forwardInput === 0) data.speed = 0;
-          data.speed = Math.max(-13, Math.min(maxSpeed, data.speed));
+          data.speed = Math.max(-14, Math.min(maxSpeed, data.speed));
 
           if (Math.abs(data.speed) > 0.15) {
             const reverseFactor = data.speed >= 0 ? 1 : -1;
-            inCar.rotation.y += turnInput * 2.2 * dt * reverseFactor;
+            inCar.rotation.y += turnInput * 2.25 * dt * reverseFactor;
           }
         } else {
           data.speed = 0;
@@ -909,17 +757,15 @@
         data.knockVel.multiplyScalar(0.85);
 
         const nextCarPos = inCar.position.clone().add(vel);
-        nextCarPos.x = Math.max(-165, Math.min(165, nextCarPos.x));
-        nextCarPos.z = Math.max(-165, Math.min(165, nextCarPos.z));
+        nextCarPos.x = Math.max(-215, Math.min(215, nextCarPos.x));
+        nextCarPos.z = Math.max(-215, Math.min(215, nextCarPos.z));
 
-        if (!collidesAt(nextCarPos, 1.35)) {
+        if (!collidesAt(nextCarPos, 1.38)) {
           inCar.position.copy(nextCarPos);
         } else {
-          // Divara və ya hasara çırpılma (Avariya)
           const impactSpeed = Math.abs(data.speed);
           if (impactSpeed > 7) {
-            const dmg = Math.round((impactSpeed - 5) * 1.8);
-            applyCarDamage(inCar, dmg, inCar.position, null);
+            applyCarDamage(inCar, Math.round((impactSpeed - 5) * 1.8), inCar.position, null);
           }
           data.speed = -data.speed * 0.25;
         }
@@ -933,12 +779,20 @@
         carHpBar.style.background = hpPct > 50 ? '#52b788' : (hpPct > 25 ? '#f4a261' : '#e63946');
       }
 
-      // 2. Bütün maşınların yenilənməsi (Trafik AI + Maşın-Maşın Avariyaları + Zədə tüstüsü)
+      // Avtomobillər (Trafik + Polis təqibi + Miqalka + Avariya)
+      const nowSec = performance.now() * 0.001;
+      const targetPos = inCar ? inCar.position : player.position;
+
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         const d = c.userData;
 
-        // Zədələnmiş maşından tüstü çıxması
+        if (d.isPolice && d.sirenRed && d.sirenBlue) {
+          const flash = Math.sin(nowSec * 14) > 0;
+          d.sirenRed.material.color.setHex(flash ? 0xff1e42 : 0x550011);
+          d.sirenBlue.material.color.setHex(!flash ? 0x1e90ff : 0x001a44);
+        }
+
         if (d.hp < 55) {
           d.smokeTimer -= dt;
           if (d.smokeTimer <= 0) {
@@ -958,13 +812,38 @@
           }
         }
 
-        // Trafik AI hərəkəti
-        if (d.isTraffic && !d.wrecked && c !== inCar) {
+        if (d.isPoliceChaser && !d.wrecked && wantedLevel > 0) {
+          const toTarget = targetPos.clone().sub(c.position);
+          toTarget.y = 0;
+          const dist = toTarget.length();
+          if (dist > 3.2) {
+            const desiredAngle = Math.atan2(toTarget.x, toTarget.z);
+            let diffAngle = desiredAngle - c.rotation.y;
+            while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+            while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+            c.rotation.y += Math.sign(diffAngle) * Math.min(Math.abs(diffAngle), 2.3 * dt);
+            d.speed = Math.min(22, d.speed + 18 * dt);
+          } else {
+            d.speed *= 0.9;
+          }
+
+          const moveVec = new THREE.Vector3(Math.sin(c.rotation.y), 0, Math.cos(c.rotation.y))
+            .multiplyScalar(d.speed * dt)
+            .addScaledVector(d.knockVel, dt);
+          d.knockVel.multiplyScalar(0.85);
+          const nextP = c.position.clone().add(moveVec);
+          if (!collidesAt(nextP, 1.4)) {
+            c.position.copy(nextP);
+          } else {
+            c.rotation.y += 0.9;
+            d.speed *= 0.5;
+          }
+        } else if (d.isTraffic && !d.wrecked && c !== inCar) {
           const forward = new THREE.Vector3(Math.sin(c.rotation.y), 0, Math.cos(c.rotation.y));
           const nextPos = c.position.clone().addScaledVector(forward, d.speed * dt).addScaledVector(d.knockVel, dt);
           d.knockVel.multiplyScalar(0.85);
 
-          if (Math.abs(nextPos.x) > 155 || Math.abs(nextPos.z) > 155 || collidesAt(nextPos, 1.4)) {
+          if (Math.abs(nextPos.x) > 205 || Math.abs(nextPos.z) > 205 || collidesAt(nextPos, 1.4)) {
             c.rotation.y += Math.PI / 2;
           } else {
             c.position.copy(nextPos);
@@ -975,15 +854,15 @@
           d.knockVel.multiplyScalar(0.85);
         }
 
-        // Maşın - Maşın toqquşması (Avariya)
+        // Maşın - Maşın avariyası
         for (let j = i + 1; j < cars.length; j++) {
           const c2 = cars[j];
           const diff = c2.position.clone().sub(c.position);
           const dist = diff.length();
 
-          if (dist < 3.3 && dist > 0.001) {
+          if (dist < 3.4 && dist > 0.001) {
             const normal = diff.normalize();
-            const overlap = 3.3 - dist;
+            const overlap = 3.4 - dist;
             c.position.addScaledVector(normal, -overlap * 0.5);
             c2.position.addScaledVector(normal, overlap * 0.5);
 
@@ -996,7 +875,7 @@
               const midPoint = c.position.clone().add(c2.position).multiplyScalar(0.5);
               applyCarDamage(c, dmg, midPoint, normal.clone().multiplyScalar(-relSpeed * 0.65));
               applyCarDamage(c2, dmg, midPoint, normal.clone().multiplyScalar(relSpeed * 0.65));
-
+              if (c === inCar || c2 === inCar) addWanted(1);
               c.userData.speed *= 0.3;
               c2.userData.speed *= 0.3;
             }
@@ -1004,59 +883,29 @@
         }
       }
 
-      // 3. NPC-lərin hərəkəti və maşınla vurulması
-      for (const npc of npcs) {
-        if (npc.dead) {
-          npc.respawnTimer -= dt;
-          if (npc.respawnTimer <= 0) {
-            npc.dead = false;
-            npc.hp = 100;
-            npc.mesh.rotation.x = 0;
-            npc.mesh.position.copy(npc.spawnPos);
-          }
-          continue;
+      // NPC modulu yenilənməsi
+      npcManager.update(dt, {
+        playerPos: player.position,
+        playerInCar: Boolean(inCar),
+        wantedLevel,
+        cars,
+        onPlayerHit: (dmg) => {
+          if (!inCar) damagePlayer(dmg);
+        },
+        onKillNpc: (killedNpc, knockDir) => {
+          addWanted(1);
+          spawnCash(killedNpc.mesh.position.x, killedNpc.mesh.position.z);
         }
+      });
 
-        // Gəzmə AI
-        npc.turnTimer -= dt;
-        if (npc.turnTimer <= 0) {
-          npc.dirAngle += (Math.random() - 0.5) * 2.2;
-          npc.turnTimer = 2 + Math.random() * 3;
-        }
-
-        const step = new THREE.Vector3(Math.sin(npc.dirAngle), 0, Math.cos(npc.dirAngle));
-        const nextNpcPos = npc.mesh.position.clone().addScaledVector(step, npc.speed * dt);
-
-        if (Math.abs(nextNpcPos.x) < 155 && Math.abs(nextNpcPos.z) < 155 && !collidesAt(nextNpcPos, 0.42)) {
-          npc.mesh.position.copy(nextNpcPos);
-          npc.mesh.rotation.y = npc.dirAngle;
-        } else {
-          npc.dirAngle += Math.PI * 0.75;
-        }
-
-        npc.mesh.userData.updateAnimation(dt, 0.5);
-
-        // Maşınla vurulma yoxlanışı
-        for (const c of cars) {
-          if (Math.abs(c.userData.speed) > 4.5) {
-            const dist = npc.mesh.position.distanceTo(c.position);
-            if (dist < 2.25) {
-              const knock = npc.mesh.position.clone().sub(c.position).normalize();
-              killNpc(npc, knock);
-              break;
-            }
-          }
-        }
-      }
-
-      // 4. Yerdəki pulların fırlanması və yığılması
+      // Pulların yığılması
       const collectorPos = inCar ? inCar.position : player.position;
       const collectRadius = inCar ? 2.6 : 1.5;
 
       for (let i = cashDrops.length - 1; i >= 0; i--) {
         const drop = cashDrops[i];
         drop.mesh.rotation.y += dt * 3.0;
-        drop.mesh.position.y = 0.45 + Math.sin(performance.now() * 0.005) * 0.08;
+        drop.mesh.position.y = 0.45 + Math.sin(nowSec * 5) * 0.08;
 
         if (collectorPos.distanceTo(drop.mesh.position) < collectRadius) {
           playerMoney += drop.amount;
@@ -1067,7 +916,7 @@
         }
       }
 
-      // 5. Avariya qığılcım/tüstü hissəcikləri
+      // Hissəciklər
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life -= dt;
@@ -1081,7 +930,7 @@
         p.mesh.scale.multiplyScalar(0.95);
       }
 
-      // 6. Kamera yenilənməsi (avariya silkələnməsi daxil)
+      // Kamera
       let shakeVec = new THREE.Vector3();
       if (cameraShake > 0) {
         cameraShake = Math.max(0, cameraShake - dt * 1.8);
@@ -1093,14 +942,14 @@
       }
 
       if (!inCar) {
-        const dist = 6.2;
+        const dist = 6.4;
         const cx = player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * dist;
         const cy = player.position.y + Math.sin(camPitch) * dist + 1.4;
         const cz = player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
         camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.22).add(shakeVec);
         camera.lookAt(player.position.x, player.position.y + 1.35, player.position.z);
       } else {
-        const camDist = 9.0;
+        const camDist = 9.2;
         const targetYaw = camYaw + inCar.rotation.y + Math.PI;
         const cx = inCar.position.x + Math.sin(targetYaw) * Math.cos(camPitch) * camDist;
         const cy = inCar.position.y + Math.sin(camPitch) * camDist + 1.8;
