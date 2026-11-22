@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Binə / Binə Sovxoz 3D - Yenilənmiş Mərhələ 1</title>
+  <title>Binə / Binə Sovxoz 3D - Mərhələ 2 (NPC, Pul, Avariya)</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -27,6 +27,45 @@
       max-width: 360px;
     }
     #hud strong { color: #ffd166; }
+    #statsHud {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.78);
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.18);
+      text-align: right;
+      min-width: 175px;
+    }
+    #moneyDisplay {
+      font-size: 22px;
+      font-weight: bold;
+      color: #52b788;
+    }
+    #carHpWrap {
+      margin-top: 8px;
+      display: none;
+    }
+    #carHpLabel {
+      font-size: 12px;
+      color: #f4a261;
+      margin-bottom: 4px;
+    }
+    #carHpBarBg {
+      width: 100%;
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #carHpBar {
+      width: 100%;
+      height: 100%;
+      background: #52b788;
+      transition: width 0.15s, background 0.15s;
+    }
     #speedBox {
       position: fixed;
       bottom: 20px;
@@ -53,16 +92,40 @@
       font-size: 14px;
       display: none;
     }
+    #toast {
+      position: fixed;
+      top: 95px;
+      right: 14px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #ffd166;
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="hud">
-    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz (40.4196° N, 50.1062° E)</div>
+    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz</div>
     <div><strong>Rejim:</strong> <span id="modeLabel">Piyada</span></div>
     <div><strong>Hərəkət:</strong> W A S D | <strong>Qaçış:</strong> Shift</div>
-    <div><strong>Tormoz / Əl əyləci:</strong> Space (maşında ani dayanma)</div>
+    <div><strong>Zərbə (NPC):</strong> E və ya Sağ Klik | <strong>Tormoz:</strong> Space</div>
     <div><strong>Kamera:</strong> Sol kliklə sürüklə | <strong>Maşın:</strong> F</div>
   </div>
+
+  <div id="statsHud">
+    <div id="moneyDisplay">0 AZN</div>
+    <div id="carHpWrap">
+      <div id="carHpLabel">Maşın Vəziyyəti: <span id="carHpText">100%</span></div>
+      <div id="carHpBarBg"><div id="carHpBar"></div></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
   <div id="speedBox">Sürət: <span id="speedVal">0</span> km/s</div>
   <div id="prompt">Maşına minmək üçün <strong>F</strong> bas</div>
 
@@ -78,7 +141,7 @@
     import * as THREE from 'three';
 
     // ==========================================
-    // 1. AYRI İNSAN MODELİ MODULU (KARAKTER)
+    // 1. İNSAN MODELİ MODULU (OYUNÇU VƏ NPC-LƏR)
     // ==========================================
     function createHumanCharacter(options = {}) {
       const shirtColor = options.shirtColor ?? 0x1d3557;
@@ -95,13 +158,11 @@
       const hairMat  = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 });
       const shoeMat  = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.6 });
 
-      // Gövdə (Torso)
       const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.28), shirtMat);
       torso.position.y = 1.16;
       torso.castShadow = true;
       root.add(torso);
 
-      // Boyun və Baş
       const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 10), skinMat);
       neck.position.y = 1.55;
       root.add(neck);
@@ -113,7 +174,6 @@
       head.castShadow = true;
       headGroup.add(head);
 
-      // Saç (üst və arxa hissə)
       const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.35), hairMat);
       hairTop.position.set(0, 0.17, -0.01);
       headGroup.add(hairTop);
@@ -122,7 +182,6 @@
       hairBack.position.set(0, 0.05, -0.14);
       headGroup.add(hairBack);
 
-      // Gözlər (istiqaməti aydın görmək üçün)
       const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
       const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), eyeMat);
       leftEye.position.set(-0.07, 0.03, 0.165);
@@ -132,7 +191,6 @@
 
       root.add(headGroup);
 
-      // Qollar (Çiyindən dönmə nöqtəsi ilə)
       function makeArm(side) {
         const pivot = new THREE.Group();
         pivot.position.set(side * 0.34, 1.46, 0);
@@ -154,7 +212,6 @@
       const rightArm = makeArm(1);
       root.add(leftArm, rightArm);
 
-      // Ayaqlar (Omba dönmə nöqtəsi ilə)
       function makeLeg(side) {
         const pivot = new THREE.Group();
         pivot.position.set(side * 0.14, 0.82, 0);
@@ -176,9 +233,21 @@
       const rightLeg = makeLeg(1);
       root.add(leftLeg, rightLeg);
 
-      // Animasiya metodu
-      let walkPhase = 0;
+      let walkPhase = Math.random() * 6;
+      let punchTimer = 0;
+
+      root.userData.triggerPunch = () => {
+        punchTimer = 0.28;
+      };
+
       root.userData.updateAnimation = (dt, speedRatio) => {
+        if (punchTimer > 0) {
+          punchTimer -= dt;
+          rightArm.rotation.x = -Math.PI * 0.65;
+          leftArm.rotation.x = 0.2;
+          return;
+        }
+
         if (speedRatio > 0.05) {
           walkPhase += dt * (7 + speedRatio * 7);
           const swing = Math.sin(walkPhase) * (0.45 + speedRatio * 0.35);
@@ -188,7 +257,6 @@
           rightArm.rotation.x = swing * 0.85;
           torso.position.y = 1.16 + Math.abs(Math.cos(walkPhase)) * 0.03;
         } else {
-          // Dayananda dərhal neytral duruşa qayıtma
           leftLeg.rotation.x *= 0.75;
           rightLeg.rotation.x *= 0.75;
           leftArm.rotation.x *= 0.75;
@@ -205,7 +273,7 @@
     // ==========================================
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x8ecae6);
-    scene.fog = new THREE.Fog(0x8ecae6, 110, 290);
+    scene.fog = new THREE.Fog(0x8ecae6, 115, 300);
 
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 400);
 
@@ -232,7 +300,6 @@
     dirLight.shadow.camera.far = 320;
     scene.add(dirLight);
 
-    // Abşeron torpağı
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(520, 520),
       new THREE.MeshStandardMaterial({ color: 0xa69b82, roughness: 0.96 })
@@ -266,9 +333,8 @@
     const lineMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.7 });
 
     function addRoad(x, z, w, d, horizontal = true) {
-      // Səki altlığı
       const sidewalk = new THREE.Mesh(
-        new THREE.PlaneGeometry(horizontal ? w : w + 3.2, horizontal ? d + 3.2 : d),
+        new THREE.PlaneGeometry(horizontal ? w : w + 3.4, horizontal ? d + 3.4 : d),
         sidewalkMat
       );
       sidewalk.rotation.x = -Math.PI / 2;
@@ -276,7 +342,6 @@
       sidewalk.receiveShadow = true;
       scene.add(sidewalk);
 
-      // Asfalt
       const road = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
       road.rotation.x = -Math.PI / 2;
       road.position.set(x, 0.03, z);
@@ -300,14 +365,12 @@
       }
     }
 
-    // Geniş məhəllə yol şəbəkəsi
     const hRoads = [-120, -60, 0, 60, 120];
     const vRoads = [-120, -60, 0, 60, 120];
 
     for (const rz of hRoads) addRoad(0, rz, 340, rz === 0 ? 14 : 11, true);
     for (const rx of vRoads) addRoad(rx, 0, rx === 0 ? 14 : 11, 340, false);
 
-    // Həyət evi + Mişar daşı hasar + Darvaza + Ağac generatoru
     const stoneColors = [0xd9cfb8, 0xcfc1a5, 0xdfd7c5, 0xc3b393, 0xb8aa8e];
     const roofColors  = [0x7a3b2e, 0x4b5259, 0x8c4a32, 0x3b4d3b];
     const gateColors  = [0x264653, 0x3d405b, 0x5c3a21, 0x2f3e46];
@@ -347,12 +410,9 @@
       const hx = cx + ((seed % 2 === 0) ? -1.5 : 1.5);
       const hz = cz - lotD * 0.14;
 
-      // Evin əsas korpusu
       addBox(houseW, houseH, houseD, hx, houseH / 2, hz, wallCol);
-      // Dam
       addBox(houseW + 0.6, 0.55, houseD + 0.6, hx, houseH + 0.27, hz, roofCol, true, true, false);
 
-      // Pəncərə detalları (dekorativ)
       const winMat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.2 });
       const win1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 0.1), winMat);
       win1.position.set(hx - houseW * 0.22, 2.2, hz + houseD / 2 + 0.03);
@@ -360,50 +420,102 @@
       win2.position.set(hx + houseW * 0.22, 2.2, hz + houseD / 2 + 0.03);
       scene.add(win1, win2);
 
-      // Həyətyanı mişar daşı hasar (4 tərəf, ön tərəfdə darvaza boşluğu ilə)
       const fenceH = 2.0;
       const thick = 0.45;
       const halfW = lotW / 2;
       const halfD = lotD / 2;
 
-      // Arxa hasar
       addBox(lotW, fenceH, thick, cx, fenceH / 2, cz - halfD, 0xc8bc9e);
-      // Sol və Sağ hasar
       addBox(thick, fenceH, lotD, cx - halfW, fenceH / 2, cz, 0xc8bc9e);
       addBox(thick, fenceH, lotD, cx + halfW, fenceH / 2, cz, 0xc8bc9e);
 
-      // Ön hasar (sol və sağ qanad + ortada dəmir darvaza)
       const gateW = 3.4;
       const sideWallW = (lotW - gateW) / 2;
       addBox(sideWallW, fenceH, thick, cx - halfW + sideWallW / 2, fenceH / 2, cz + halfD, 0xc8bc9e);
       addBox(sideWallW, fenceH, thick, cx + halfW - sideWallW / 2, fenceH / 2, cz + halfD, 0xc8bc9e);
-      // Dəmir darvaza
       addBox(gateW, fenceH + 0.15, 0.2, cx, (fenceH + 0.15) / 2, cz + halfD, gateCol);
 
-      // Həyətdə ağac
       addTree(cx - halfW + 2.3, cz + halfD - 2.5);
     }
 
-    // Bütün məhəllə kvartallarını sıx evlərlə doldururuq
     const centers = [-90, -30, 30, 90];
     let seedCounter = 1;
 
     for (const bx of centers) {
       for (const bz of centers) {
-        // Hər kvartalda 4 həyət evi
         addCompoundHouse(bx - 11.5, bz - 11.5, 20, 20, seedCounter++);
         addCompoundHouse(bx + 11.5, bz - 11.5, 20, 20, seedCounter++);
         addCompoundHouse(bx - 11.5, bz + 11.5, 20, 20, seedCounter++);
         addCompoundHouse(bx + 11.5, bz + 11.5, 20, 20, seedCounter++);
 
-        // Küçə kənarı işıq dirəyi və ağac
         addLightPole(bx - 21, bz - 21);
         addTree(bx + 21.5, bz - 21.5);
       }
     }
 
     // ==========================================
-    // 4. OYUNÇU VƏ AVTOMOBİLLƏR
+    // 4. PUL (AZN) VƏ HİSSƏCİK (AVARİYA) SİSTEMİ
+    // ==========================================
+    let playerMoney = 0;
+    const moneyDisplay = document.getElementById('moneyDisplay');
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.opacity = '1';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toastEl.style.opacity = '0'; }, 1800);
+    }
+
+    const cashDrops = [];
+    const cashGeo = new THREE.BoxGeometry(0.65, 0.06, 0.32);
+    const cashMat = new THREE.MeshStandardMaterial({ color: 0x2d9e54, emissive: 0x134e27, roughness: 0.4 });
+
+    function spawnCash(x, z) {
+      // ~65% ehtimalla pul düşür, ~35% ehtimalla düşmür
+      if (Math.random() > 0.65) return;
+
+      const amount = (Math.floor(Math.random() * 7) + 1) * 5; // 5 - 35 AZN
+      const mesh = new THREE.Mesh(cashGeo, cashMat);
+      mesh.position.set(x, 0.45, z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      cashDrops.push({ mesh, amount });
+    }
+
+    // Avariya qığılcım və tüstü hissəcikləri
+    const particles = [];
+    let cameraShake = 0;
+
+    function spawnCrashEffect(pos, intensity = 1) {
+      cameraShake = Math.min(0.65, 0.18 * intensity);
+      const count = Math.min(24, Math.floor(8 + intensity * 6));
+      for (let i = 0; i < count; i++) {
+        const isSpark = i % 2 === 0;
+        const pMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(isSpark ? 0.14 : 0.35, isSpark ? 0.14 : 0.35, isSpark ? 0.14 : 0.35),
+          new THREE.MeshBasicMaterial({ color: isSpark ? 0xffb703 : 0x555555 })
+        );
+        pMesh.position.copy(pos);
+        pMesh.position.y += 0.8;
+        scene.add(pMesh);
+
+        particles.push({
+          mesh: pMesh,
+          vel: new THREE.Vector3(
+            (Math.random() - 0.5) * 9 * intensity,
+            (Math.random() * 4 + 2),
+            (Math.random() - 0.5) * 9 * intensity
+          ),
+          life: 0.45 + Math.random() * 0.35,
+          isSpark
+        });
+      }
+    }
+
+    // ==========================================
+    // 5. OYUNÇU VƏ EYNİ İNSAN MODELLİ NPC-LƏR
     // ==========================================
     const player = createHumanCharacter({
       shirtColor: 0x1e6091,
@@ -414,16 +526,80 @@
     player.position.set(4, 0, 8);
     scene.add(player);
 
-    function createCar(x, z, yaw, bodyColor) {
+    const npcs = [];
+    const npcOutfits = [
+      { shirt: 0xe63946, pants: 0x1d3557, hair: 0x111111 },
+      { shirt: 0xf4a261, pants: 0x264653, hair: 0x3d2314 },
+      { shirt: 0x2a9d8f, pants: 0x2b2d42, hair: 0x1a1a1a },
+      { shirt: 0x6d597a, pants: 0x1f2421, hair: 0x4a3525 },
+      { shirt: 0x457b9d, pants: 0x333533, hair: 0x0d0d0d },
+      { shirt: 0xe9c46a, pants: 0x22223b, hair: 0x2b1d0e }
+    ];
+
+    const sidewalkSpots = [
+      [-45, 8], [-15, -8], [18, 8], [42, -8],
+      [-8, 35], [8, -42], [-68, 25], [68, -28],
+      [-52, 68], [52, -68], [-22, 52], [25, -52],
+      [-85, -8], [85, 8], [-8, -85], [8, 85],
+      [-112, 15], [112, -15]
+    ];
+
+    function spawnNpc(x, z, idx) {
+      const style = npcOutfits[idx % npcOutfits.length];
+      const mesh = createHumanCharacter({
+        shirtColor: style.shirt,
+        pantsColor: style.pants,
+        hairColor:  style.hair
+      });
+      mesh.position.set(x, 0, z);
+      scene.add(mesh);
+
+      npcs.push({
+        mesh,
+        hp: 100,
+        dead: false,
+        deathTimer: 0,
+        respawnTimer: 0,
+        spawnPos: new THREE.Vector3(x, 0, z),
+        dirAngle: Math.random() * Math.PI * 2,
+        turnTimer: 1 + Math.random() * 3,
+        speed: 2.1 + Math.random() * 0.9
+      });
+    }
+
+    sidewalkSpots.forEach(([sx, sz], i) => spawnNpc(sx, sz, i));
+
+    function killNpc(npc, knockDir) {
+      if (npc.dead) return;
+      npc.dead = true;
+      npc.deathTimer = 0;
+      npc.respawnTimer = 14; // 14 saniyə sonra başqa yerdən yenidən çıxır
+      npc.mesh.rotation.x = -Math.PI / 2;
+      npc.mesh.position.y = 0.22;
+      if (knockDir) {
+        npc.mesh.position.addScaledVector(knockDir, 0.9);
+      }
+      spawnCash(npc.mesh.position.x, npc.mesh.position.z);
+    }
+
+    // ==========================================
+    // 6. AVTOMOBİLLƏR VƏ TRAFİK (AI SÜRÜCÜLƏR)
+    // ==========================================
+    function createCar(x, z, yaw, bodyColor, isTraffic = false) {
       const car = new THREE.Group();
 
-      const chassis = new THREE.Mesh(
-        new THREE.BoxGeometry(2.1, 0.85, 4.3),
-        new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.35, metalness: 0.25 })
-      );
+      const chassisMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.35, metalness: 0.25 });
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.85, 4.3), chassisMat);
       chassis.position.y = 0.75;
       chassis.castShadow = true;
       car.add(chassis);
+
+      // Ön kapot (avariya olanda əzilir/qaralır)
+      const hoodMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.25 });
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.22, 1.25), hoodMat);
+      hood.position.set(0, 1.18, 1.48);
+      hood.castShadow = true;
+      car.add(hood);
 
       const cabin = new THREE.Mesh(
         new THREE.BoxGeometry(1.75, 0.65, 2.1),
@@ -433,7 +609,6 @@
       cabin.castShadow = true;
       car.add(cabin);
 
-      // Ön faralar
       const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfff3b0 });
       const hl1 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.08), headlightMat);
       hl1.position.set(-0.68, 0.8, 2.16);
@@ -460,20 +635,65 @@
 
       car.position.set(x, 0, z);
       car.rotation.y = yaw;
-      car.userData = { speed: 0 };
+      car.userData = {
+        speed: isTraffic ? 9.5 : 0,
+        hp: 100,
+        maxHp: 100,
+        wrecked: false,
+        isTraffic,
+        baseColor: bodyColor,
+        hood,
+        hoodMat,
+        chassisMat,
+        knockVel: new THREE.Vector3(),
+        smokeTimer: 0
+      };
       scene.add(car);
       return car;
     }
 
     const cars = [
-      createCar(12, 3.2, Math.PI / 2, 0xd62828),
-      createCar(-24, -3.2, -Math.PI / 2, 0xf77f00),
-      createCar(60, 22, 0, 0x2a9d8f),
-      createCar(-60, -25, Math.PI, 0xe9c46a)
+      createCar(12, 3.2, Math.PI / 2, 0xd62828, false),
+      createCar(-24, -3.2, -Math.PI / 2, 0xf77f00, false),
+      // Yolda hərəkət edən trafik maşınları (avariya üçün)
+      createCar(-90, 3.2, Math.PI / 2, 0xe9c46a, true),
+      createCar(95, -3.2, -Math.PI / 2, 0x2a9d8f, true),
+      createCar(3.2, -90, 0, 0x457b9d, true),
+      createCar(-3.2, 95, Math.PI, 0xadb5bd, true),
+      createCar(63.2, -60, 0, 0x9b5de5, true),
+      createCar(-63.2, 60, Math.PI, 0xf15bb5, true)
     ];
 
+    function applyCarDamage(car, damage, impactPoint, pushVec) {
+      const d = car.userData;
+      if (d.wrecked) return;
+
+      d.hp = Math.max(0, d.hp - damage);
+      if (pushVec) {
+        d.knockVel.add(pushVec);
+      }
+
+      spawnCrashEffect(impactPoint, Math.min(2.2, damage / 18));
+
+      // Vizual əzilmə: kapot əyilir və rəngi tündləşir
+      const dmgRatio = 1 - d.hp / d.maxHp;
+      d.hood.rotation.x = -dmgRatio * 0.28;
+      d.hood.position.y = 1.18 + dmgRatio * 0.08;
+      d.hoodMat.color.setHex(d.baseColor).lerp(new THREE.Color(0x222222), dmgRatio * 0.65);
+
+      if (d.hp <= 0) {
+        d.wrecked = true;
+        d.speed = 0;
+        d.chassisMat.color.setHex(0x1f1f1f);
+        d.hoodMat.color.setHex(0x111111);
+        if (car === inCar) {
+          showToast('Maşın sıradan çıxdı! Düşüb başqa maşına min (F).');
+        }
+      }
+    }
+
     // ==========================================
-    // 5. İDARƏETMƏ, DAYANMA (TORMOZ) VƏ KAMERA
+    // 7. İDARƏETMƏ VƏ KAMERA
     // ==========================================
     const keys = {};
     let inCar = null;
@@ -486,11 +706,40 @@
     const promptEl  = document.getElementById('prompt');
     const speedBox  = document.getElementById('speedBox');
     const speedVal  = document.getElementById('speedVal');
+    const carHpWrap = document.getElementById('carHpWrap');
+    const carHpText = document.getElementById('carHpText');
+    const carHpBar  = document.getElementById('carHpBar');
+
+    function performPunch() {
+      if (inCar) return;
+      player.userData.triggerPunch();
+      const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+
+      for (const npc of npcs) {
+        if (npc.dead) continue;
+        const toNpc = npc.mesh.position.clone().sub(player.position);
+        const dist = toNpc.length();
+        if (dist < 2.2) {
+          toNpc.normalize();
+          if (forward.dot(toNpc) > 0.25) {
+            npc.hp -= 50;
+            npc.mesh.position.addScaledVector(forward, 0.45);
+            if (npc.hp <= 0) {
+              killNpc(npc, forward);
+            }
+          }
+        }
+      }
+    }
 
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       keys[k] = true;
       if (e.code === 'Space') keys['space'] = true;
+
+      if (k === 'e') {
+        performPunch();
+      }
 
       if (k === 'f') {
         if (inCar) {
@@ -501,10 +750,12 @@
           inCar = null;
           modeLabel.textContent = 'Piyada';
           speedBox.style.display = 'none';
+          carHpWrap.style.display = 'none';
         } else {
           let nearest = null;
-          let minDist = 4.2;
+          let minDist = 4.3;
           for (const c of cars) {
+            if (c.userData.wrecked) continue;
             const dist = player.position.distanceTo(c.position);
             if (dist < minDist) {
               minDist = dist;
@@ -513,9 +764,11 @@
           }
           if (nearest) {
             inCar = nearest;
+            inCar.userData.isTraffic = false; // Oyunçu mindikdə trafik AI dayanır
             player.visible = false;
             modeLabel.textContent = 'Maşında';
             speedBox.style.display = 'block';
+            carHpWrap.style.display = 'block';
           }
         }
       }
@@ -531,10 +784,17 @@
       for (const k in keys) keys[k] = false;
     });
 
+    renderer.domElement.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      performPunch();
+    });
+
     renderer.domElement.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      lastMouse.x = e.clientX;
-      lastMouse.y = e.clientY;
+      if (e.button === 0) {
+        isDragging = true;
+        lastMouse.x = e.clientX;
+        lastMouse.y = e.clientY;
+      }
     });
 
     window.addEventListener('mouseup', () => { isDragging = false; });
@@ -572,8 +832,8 @@
       const isRunning    = Boolean(keys['shift']);
       const isBraking    = Boolean(keys['space']);
 
+      // 1. Oyunçu hərəkəti
       if (!inCar) {
-        // Piyada hərəkəti (düyməni buraxan kimi dərhal dayanır)
         let speedRatio = 0;
         const moveSpeed = isRunning ? 10.5 : 5.8;
 
@@ -601,56 +861,52 @@
 
         let canEnter = false;
         for (const c of cars) {
-          if (player.position.distanceTo(c.position) < 4.2) {
+          if (!c.userData.wrecked && player.position.distanceTo(c.position) < 4.3) {
             canEnter = true;
             break;
           }
         }
         promptEl.style.display = canEnter ? 'block' : 'none';
-
-        const dist = 6.2;
-        const cx = player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * dist;
-        const cy = player.position.y + Math.sin(camPitch) * dist + 1.4;
-        const cz = player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
-        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.22);
-        camera.lookAt(player.position.x, player.position.y + 1.35, player.position.z);
       } else {
-        // Maşın fizikası və güclü tormoz sistemi
+        // Oyunçunun sürdüyü maşın
         promptEl.style.display = 'none';
         const data = inCar.userData;
-        const accel = 26;
-        const maxSpeed = 30;
-        const naturalFriction = 14; // Qazı buraxanda sürətli dayanma
-        const handbrakeForce = 48;  // Space basanda ani dayanma
 
-        if (isBraking) {
-          data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), handbrakeForce * dt);
-        } else if (forwardInput > 0) {
-          if (data.speed < 0) data.speed += handbrakeForce * dt; // Geri gedərkən W basanda tormoz
-          else data.speed += accel * dt;
-        } else if (forwardInput < 0) {
-          if (data.speed > 0) data.speed -= handbrakeForce * dt; // İrəli gedərkən S basanda tormoz
-          else data.speed -= accel * 0.8 * dt;
+        if (!data.wrecked) {
+          const accel = 26;
+          const maxSpeed = 30;
+          const naturalFriction = 14;
+          const handbrakeForce = 48;
+
+          if (isBraking) {
+            data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), handbrakeForce * dt);
+          } else if (forwardInput > 0) {
+            if (data.speed < 0) data.speed += handbrakeForce * dt;
+            else data.speed += accel * dt;
+          } else if (forwardInput < 0) {
+            if (data.speed > 0) data.speed -= handbrakeForce * dt;
+            else data.speed -= accel * 0.8 * dt;
+          } else {
+            data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), naturalFriction * dt);
+          }
+
+          if (Math.abs(data.speed) < 0.08 && forwardInput === 0) data.speed = 0;
+          data.speed = Math.max(-13, Math.min(maxSpeed, data.speed));
+
+          if (Math.abs(data.speed) > 0.15) {
+            const reverseFactor = data.speed >= 0 ? 1 : -1;
+            inCar.rotation.y += turnInput * 2.2 * dt * reverseFactor;
+          }
         } else {
-          data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), naturalFriction * dt);
-        }
-
-        if (Math.abs(data.speed) < 0.08 && forwardInput === 0) {
           data.speed = 0;
-        }
-
-        data.speed = Math.max(-13, Math.min(maxSpeed, data.speed));
-
-        if (Math.abs(data.speed) > 0.15) {
-          const reverseFactor = data.speed >= 0 ? 1 : -1;
-          inCar.rotation.y += turnInput * 2.2 * dt * reverseFactor;
         }
 
         const vel = new THREE.Vector3(
           Math.sin(inCar.rotation.y) * data.speed * dt,
           0,
           Math.cos(inCar.rotation.y) * data.speed * dt
-        );
+        ).addScaledVector(data.knockVel, dt);
+        data.knockVel.multiplyScalar(0.85);
 
         const nextCarPos = inCar.position.clone().add(vel);
         nextCarPos.x = Math.max(-165, Math.min(165, nextCarPos.x));
@@ -659,18 +915,197 @@
         if (!collidesAt(nextCarPos, 1.35)) {
           inCar.position.copy(nextCarPos);
         } else {
-          data.speed = 0; // Divara/hasara dəyəndə tam dayanma
+          // Divara və ya hasara çırpılma (Avariya)
+          const impactSpeed = Math.abs(data.speed);
+          if (impactSpeed > 7) {
+            const dmg = Math.round((impactSpeed - 5) * 1.8);
+            applyCarDamage(inCar, dmg, inCar.position, null);
+          }
+          data.speed = -data.speed * 0.25;
         }
 
         player.position.copy(inCar.position);
         speedVal.textContent = Math.round(Math.abs(data.speed) * 3.6);
 
+        const hpPct = Math.round((data.hp / data.maxHp) * 100);
+        carHpText.textContent = `${hpPct}%`;
+        carHpBar.style.width = `${hpPct}%`;
+        carHpBar.style.background = hpPct > 50 ? '#52b788' : (hpPct > 25 ? '#f4a261' : '#e63946');
+      }
+
+      // 2. Bütün maşınların yenilənməsi (Trafik AI + Maşın-Maşın Avariyaları + Zədə tüstüsü)
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        const d = c.userData;
+
+        // Zədələnmiş maşından tüstü çıxması
+        if (d.hp < 55) {
+          d.smokeTimer -= dt;
+          if (d.smokeTimer <= 0) {
+            d.smokeTimer = d.wrecked ? 0.08 : 0.22;
+            const sMesh = new THREE.Mesh(
+              new THREE.BoxGeometry(0.45, 0.45, 0.45),
+              new THREE.MeshBasicMaterial({ color: d.wrecked ? 0x222222 : 0x777777 })
+            );
+            sMesh.position.copy(c.position).add(new THREE.Vector3(0, 1.3, 1.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.rotation.y));
+            scene.add(sMesh);
+            particles.push({
+              mesh: sMesh,
+              vel: new THREE.Vector3((Math.random() - 0.5) * 1.2, 2.5, (Math.random() - 0.5) * 1.2),
+              life: 0.7,
+              isSpark: false
+            });
+          }
+        }
+
+        // Trafik AI hərəkəti
+        if (d.isTraffic && !d.wrecked && c !== inCar) {
+          const forward = new THREE.Vector3(Math.sin(c.rotation.y), 0, Math.cos(c.rotation.y));
+          const nextPos = c.position.clone().addScaledVector(forward, d.speed * dt).addScaledVector(d.knockVel, dt);
+          d.knockVel.multiplyScalar(0.85);
+
+          if (Math.abs(nextPos.x) > 155 || Math.abs(nextPos.z) > 155 || collidesAt(nextPos, 1.4)) {
+            c.rotation.y += Math.PI / 2;
+          } else {
+            c.position.copy(nextPos);
+          }
+        } else if (c !== inCar && d.knockVel.lengthSq() > 0.01) {
+          const nextPos = c.position.clone().addScaledVector(d.knockVel, dt);
+          if (!collidesAt(nextPos, 1.4)) c.position.copy(nextPos);
+          d.knockVel.multiplyScalar(0.85);
+        }
+
+        // Maşın - Maşın toqquşması (Avariya)
+        for (let j = i + 1; j < cars.length; j++) {
+          const c2 = cars[j];
+          const diff = c2.position.clone().sub(c.position);
+          const dist = diff.length();
+
+          if (dist < 3.3 && dist > 0.001) {
+            const normal = diff.normalize();
+            const overlap = 3.3 - dist;
+            c.position.addScaledVector(normal, -overlap * 0.5);
+            c2.position.addScaledVector(normal, overlap * 0.5);
+
+            const v1 = new THREE.Vector3(Math.sin(c.rotation.y), 0, Math.cos(c.rotation.y)).multiplyScalar(c.userData.speed);
+            const v2 = new THREE.Vector3(Math.sin(c2.rotation.y), 0, Math.cos(c2.rotation.y)).multiplyScalar(c2.userData.speed);
+            const relSpeed = v1.sub(v2).length();
+
+            if (relSpeed > 4.5) {
+              const dmg = Math.round(relSpeed * 1.4);
+              const midPoint = c.position.clone().add(c2.position).multiplyScalar(0.5);
+              applyCarDamage(c, dmg, midPoint, normal.clone().multiplyScalar(-relSpeed * 0.65));
+              applyCarDamage(c2, dmg, midPoint, normal.clone().multiplyScalar(relSpeed * 0.65));
+
+              c.userData.speed *= 0.3;
+              c2.userData.speed *= 0.3;
+            }
+          }
+        }
+      }
+
+      // 3. NPC-lərin hərəkəti və maşınla vurulması
+      for (const npc of npcs) {
+        if (npc.dead) {
+          npc.respawnTimer -= dt;
+          if (npc.respawnTimer <= 0) {
+            npc.dead = false;
+            npc.hp = 100;
+            npc.mesh.rotation.x = 0;
+            npc.mesh.position.copy(npc.spawnPos);
+          }
+          continue;
+        }
+
+        // Gəzmə AI
+        npc.turnTimer -= dt;
+        if (npc.turnTimer <= 0) {
+          npc.dirAngle += (Math.random() - 0.5) * 2.2;
+          npc.turnTimer = 2 + Math.random() * 3;
+        }
+
+        const step = new THREE.Vector3(Math.sin(npc.dirAngle), 0, Math.cos(npc.dirAngle));
+        const nextNpcPos = npc.mesh.position.clone().addScaledVector(step, npc.speed * dt);
+
+        if (Math.abs(nextNpcPos.x) < 155 && Math.abs(nextNpcPos.z) < 155 && !collidesAt(nextNpcPos, 0.42)) {
+          npc.mesh.position.copy(nextNpcPos);
+          npc.mesh.rotation.y = npc.dirAngle;
+        } else {
+          npc.dirAngle += Math.PI * 0.75;
+        }
+
+        npc.mesh.userData.updateAnimation(dt, 0.5);
+
+        // Maşınla vurulma yoxlanışı
+        for (const c of cars) {
+          if (Math.abs(c.userData.speed) > 4.5) {
+            const dist = npc.mesh.position.distanceTo(c.position);
+            if (dist < 2.25) {
+              const knock = npc.mesh.position.clone().sub(c.position).normalize();
+              killNpc(npc, knock);
+              break;
+            }
+          }
+        }
+      }
+
+      // 4. Yerdəki pulların fırlanması və yığılması
+      const collectorPos = inCar ? inCar.position : player.position;
+      const collectRadius = inCar ? 2.6 : 1.5;
+
+      for (let i = cashDrops.length - 1; i >= 0; i--) {
+        const drop = cashDrops[i];
+        drop.mesh.rotation.y += dt * 3.0;
+        drop.mesh.position.y = 0.45 + Math.sin(performance.now() * 0.005) * 0.08;
+
+        if (collectorPos.distanceTo(drop.mesh.position) < collectRadius) {
+          playerMoney += drop.amount;
+          moneyDisplay.textContent = `${playerMoney} AZN`;
+          showToast(`+${drop.amount} AZN götürüldü`);
+          scene.remove(drop.mesh);
+          cashDrops.splice(i, 1);
+        }
+      }
+
+      // 5. Avariya qığılcım/tüstü hissəcikləri
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          scene.remove(p.mesh);
+          particles.splice(i, 1);
+          continue;
+        }
+        if (p.isSpark) p.vel.y -= 18 * dt;
+        p.mesh.position.addScaledVector(p.vel, dt);
+        p.mesh.scale.multiplyScalar(0.95);
+      }
+
+      // 6. Kamera yenilənməsi (avariya silkələnməsi daxil)
+      let shakeVec = new THREE.Vector3();
+      if (cameraShake > 0) {
+        cameraShake = Math.max(0, cameraShake - dt * 1.8);
+        shakeVec.set(
+          (Math.random() - 0.5) * cameraShake,
+          (Math.random() - 0.5) * cameraShake,
+          (Math.random() - 0.5) * cameraShake
+        );
+      }
+
+      if (!inCar) {
+        const dist = 6.2;
+        const cx = player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * dist;
+        const cy = player.position.y + Math.sin(camPitch) * dist + 1.4;
+        const cz = player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.22).add(shakeVec);
+        camera.lookAt(player.position.x, player.position.y + 1.35, player.position.z);
+      } else {
         const camDist = 9.0;
         const targetYaw = camYaw + inCar.rotation.y + Math.PI;
         const cx = inCar.position.x + Math.sin(targetYaw) * Math.cos(camPitch) * camDist;
         const cy = inCar.position.y + Math.sin(camPitch) * camDist + 1.8;
         const cz = inCar.position.z + Math.cos(targetYaw) * Math.cos(camPitch) * camDist;
-        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.16);
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.16).add(shakeVec);
         camera.lookAt(inCar.position.x, inCar.position.y + 1.3, inCar.position.z);
       }
 
