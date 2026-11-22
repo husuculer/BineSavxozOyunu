@@ -23,7 +23,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
     metalness: 0.75
   });
 
-  // Aşağı şassi və bamperlər
   const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(2.14, 0.55, 4.45), mainMat);
   lowerBody.position.y = 0.62;
   lowerBody.castShadow = true;
@@ -39,7 +38,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
   rearBumper.castShadow = true;
   car.add(rearBumper);
 
-  // Polis zolağı (yan tərəflər)
   if (isPolice) {
     const stripeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 4.35), trimMat);
     stripeL.position.set(-1.08, 0.72, 0);
@@ -48,7 +46,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
     car.add(stripeL, stripeR);
   }
 
-  // Əyilə bilən kapot
   const hoodMat = new THREE.MeshStandardMaterial({
     color: isPolice ? 0xf8f9fa : bodyColor,
     roughness: 0.35,
@@ -59,7 +56,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
   hood.castShadow = true;
   car.add(hood);
 
-  // Kabin və şüşələr
   const cabinRoof = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.56, 1.95), mainMat);
   cabinRoof.position.set(0, 1.38, -0.22);
   cabinRoof.castShadow = true;
@@ -75,14 +71,12 @@ export function createDetailedCar(x, z, yaw, options = {}) {
   rearWindow.rotation.x = 0.35;
   car.add(rearWindow);
 
-  // Yan güzgülər
   for (const s of [-1, 1]) {
     const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.14), trimMat);
     mirror.position.set(s * 1.18, 1.08, 0.62);
     car.add(mirror);
   }
 
-  // Ön və arxa faralar
   const headMat = new THREE.MeshBasicMaterial({ color: 0xfff3b0 });
   const tailMat = new THREE.MeshBasicMaterial({ color: 0xe63946 });
   for (const s of [-1, 1]) {
@@ -93,7 +87,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
     car.add(hl, tl);
   }
 
-  // Polis miqalkası (göy + qırmızı)
   let sirenRed = null;
   let sirenBlue = null;
   if (isPolice) {
@@ -115,7 +108,6 @@ export function createDetailedCar(x, z, yaw, options = {}) {
     car.add(lightBarBase, sirenRed, sirenBlue);
   }
 
-  // Detallı təkərlər (şin + disk)
   const tireGeo = new THREE.CylinderGeometry(0.43, 0.43, 0.34, 14);
   tireGeo.rotateZ(Math.PI / 2);
   const tireMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 });
@@ -147,8 +139,11 @@ export function createDetailedCar(x, z, yaw, options = {}) {
     hp: 100,
     maxHp: 100,
     wrecked: false,
+    exploded: false,
     isPolice,
     isTraffic,
+    occupantsLeft: isPolice ? 2 : (isTraffic ? 1 : 0),
+    exitTimer: 6 + Math.random() * 8,
     baseColor: isPolice ? 0xf8f9fa : bodyColor,
     hood,
     hoodMat,
