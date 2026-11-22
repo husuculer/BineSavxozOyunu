@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Binə / Binə Sovxoz 3D - Mərhələ 1</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      overflow: hidden;
+      background: #1b222c;
+      font-family: Arial, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+    #hud {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.65);
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 340px;
+    }
+    #hud strong { color: #ffd166; }
+    #prompt {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.78);
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #ffd166;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz (40.4196° N, 50.1062° E)</div>
+    <div><strong>Rejim:</strong> <span id="modeLabel">Piyada</span></div>
+    <div><strong>Hərəkət:</strong> W A S D / Oxlar | <strong>Tormoz/Geri:</strong> S / Aşağı</div>
+    <div><strong>Kamera:</strong> Sol kliklə sürüklə (və ya ekranı kliklə)</div>
+    <div><strong>Maşın:</strong> Yaxınlaş və <strong>F</strong> bas (min/düş)</div>
+  </div>
+  <div id="prompt">Maşına minmək üçün <strong>F</strong> bas</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.169.0/build/three.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87b7d8);
+    scene.fog = new THREE.Fog(0x87b7d8, 90, 240);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 350);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // İşıqlandırma
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff4d6, 1.1);
+    dirLight.position.set(60, 90, 45);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    const d = 110;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    dirLight.shadow.camera.near = 10;
+    dirLight.shadow.camera.far = 260;
+    scene.add(dirLight);
+
+    // Abşeron torpaq səthi (qumlu-boz ton)
+    const groundGeo = new THREE.PlaneGeometry(420, 420);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x9e9378, roughness: 0.95 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Toqquşma qutuları (binalar və maneələr)
+    const colliders = [];
+
+    function addBox(w, h, d, x, y, z, color, castShadow = true, receiveShadow = true, registerCollider = true) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.85 })
+      );
+      mesh.position.set(x, y, z);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = receiveShadow;
+      scene.add(mesh);
+      if (registerCollider) {
+        colliders.push(new THREE.Box3().setFromObject(mesh));
+      }
+      return mesh;
+    }
+
+    // Yol şəbəkəsi (Binə və Binə sovxoz ətrafı sxematik yollar)
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x2f343a, roughness: 0.9 });
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0xe6e6e6, roughness: 0.7 });
+
+    function addRoad(x, z, w, d, horizontal = true) {
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
+      road.rotation.x = -Math.PI / 2;
+      road.position.set(x, 0.02, z);
+      road.receiveShadow = true;
+      scene.add(road);
+
+      // Kəsik ağ zolaq
+      if (horizontal) {
+        for (let lx = x - w / 2 + 6; lx < x + w / 2 - 4; lx += 12) {
+          const stripe = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.25), lineMat);
+          stripe.rotation.x = -Math.PI / 2;
+          stripe.position.set(lx, 0.03, z);
+          scene.add(stripe);
+        }
+      } else {
+        for (let lz = z - d / 2 + 6; lz < z + d / 2 - 4; lz += 12) {
+          const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 5), lineMat);
+          stripe.rotation.x = -Math.PI / 2;
+          stripe.position.set(x, 0.03, lz);
+          scene.add(stripe);
+        }
+      }
+    }
+
+    // Əsas şose və kəsişən məhəllə yolları
+    addRoad(0, 0, 260, 14, true);
+    addRoad(0, 65, 260, 12, true);
+    addRoad(0, -65, 260, 12, true);
+    addRoad(-55, 0, 12, 240, false);
+    addRoad(55, 0, 12, 240, false);
+
+    // Low-poly evlər, həyət divarları və kiçik obyektlər
+    const buildingColors = [0xd8d2c5, 0xc9b79c, 0xaab2b8, 0xb89f84, 0x8f9aa3];
+    const roofColors = [0x6e3b2c, 0x4a4e54, 0x7a4938];
+
+    function addHouse(x, z, w, d, h, hasWall = true) {
+      const wallCol = buildingColors[Math.abs(Math.floor(x * 13 + z * 7)) % buildingColors.length];
+      const roofCol = roofColors[Math.abs(Math.floor(x * 5 + z * 11)) % roofColors.length];
+      addBox(w, h, d, x, h / 2, z, wallCol);
+      addBox(w + 0.5, 0.7, d + 0.5, x, h + 0.35, z, roofCol, true, true, false);
+
+      if (hasWall) {
+        // Həyətyanı aşağı hasar
+        addBox(w + 4, 1.4, 0.4, x, 0.7, z + d / 2 + 3.5, 0x8d8578);
+      }
+    }
+
+    // Blok 1 (Şimal-Qərb)
+    addHouse(-95, -32, 14, 10, 5.5);
+    addHouse(-25, -32, 16, 11, 6.5);
+    addHouse(-95, 32, 13, 12, 5.0);
+    addHouse(-25, 32, 15, 10, 7.0);
+
+    // Blok 2 (Şimal-Şərq)
+    addHouse(25, -32, 16, 11, 6.0);
+    addHouse(92, -32, 14, 12, 5.5);
+    addHouse(25, 32, 14, 10, 6.5);
+    addHouse(92, 32, 17, 11, 5.0);
+
+    // Blok 3 (Cənub zolağı)
+    addHouse(-90, 95, 15, 11, 5.5);
+    addHouse(-22, 95, 18, 12, 7.5);
+    addHouse(24, 95, 15, 11, 6.0);
+    addHouse(90, 95, 14, 10, 5.5);
+
+    // Oyunçu (Piyada)
+    const player = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 1.2, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x2b6cb0 })
+    );
+    bodyMesh.position.y = 1.0;
+    bodyMesh.castShadow = true;
+
+    const headMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.55, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0xf1c27d })
+    );
+    headMesh.position.y = 1.9;
+    headMesh.castShadow = true;
+
+    player.add(bodyMesh, headMesh);
+    player.position.set(0, 0, 8);
+    scene.add(player);
+
+    // Avtomobil (Sürülə bilən low-poly maşın)
+    function createCar(x, z, yaw, bodyColor) {
+      const car = new THREE.Group();
+
+      const chassis = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 0.85, 4.3),
+        new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.2 })
+      );
+      chassis.position.y = 0.75;
+      chassis.castShadow = true;
+      car.add(chassis);
+
+      const cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.75, 0.65, 2.1),
+        new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.2, metalness: 0.5 })
+      );
+      cabin.position.set(0, 1.45, -0.2);
+      cabin.castShadow = true;
+      car.add(cabin);
+
+      const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 12);
+      wheelGeo.rotateZ(Math.PI / 2);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
+
+      const wheelCoords = [
+        [-1.1, 0.42, 1.35],
+        [1.1, 0.42, 1.35],
+        [-1.1, 0.42, -1.35],
+        [1.1, 0.42, -1.35]
+      ];
+      for (const [wx, wy, wz] of wheelCoords) {
+        const w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.position.set(wx, wy, wz);
+        w.castShadow = true;
+        car.add(w);
+      }
+
+      car.position.set(x, 0, z);
+      car.rotation.y = yaw;
+      car.userData = { speed: 0, steer: 0 };
+      scene.add(car);
+      return car;
+    }
+
+    const cars = [
+      createCar(14, 2.5, Math.PI / 2, 0xd62828),
+      createCar(-28, -2.5, -Math.PI / 2, 0xf77f00),
+      createCar(52.5, 22, 0, 0x2a9d8f)
+    ];
+
+    // İdarəetmə və Kamera vəziyyəti
+    const keys = {};
+    let inCar = null;
+    let camYaw = 0;
+    let camPitch = 0.35;
+    let isDragging = false;
+    let lastMouse = { x: 0, y: 0 };
+
+    const modeLabel = document.getElementById('modeLabel');
+    const promptEl = document.getElementById('prompt');
+
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      keys[k] = true;
+
+      if (k === 'f') {
+        if (inCar) {
+          // Maşından düşmə
+          const exitOffset = new THREE.Vector3(-2.4, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), inCar.rotation.y);
+          player.position.copy(inCar.position).add(exitOffset);
+          player.position.y = 0;
+          player.visible = true;
+          inCar = null;
+          modeLabel.textContent = 'Piyada';
+        } else {
+          // Ən yaxın maşına minmə
+          let nearest = null;
+          let minDist = 4.2;
+          for (const c of cars) {
+            const dist = player.position.distanceTo(c.position);
+            if (dist < minDist) {
+              minDist = dist;
+              nearest = c;
+            }
+          }
+          if (nearest) {
+            inCar = nearest;
+            inCar.userData.speed *= 0.2;
+            player.visible = false;
+            modeLabel.textContent = 'Maşında';
+          }
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    renderer.domElement.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      lastMouse.x = e.clientX;
+      lastMouse.y = e.clientY;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastMouse.x;
+      const dy = e.clientY - lastMouse.y;
+      lastMouse.x = e.clientX;
+      lastMouse.y = e.clientY;
+
+      camYaw -= dx * 0.006;
+      camPitch = Math.max(0.1, Math.min(1.15, camPitch + dy * 0.005));
+    });
+
+    function collidesAt(pos, radius = 0.6) {
+      const box = new THREE.Box3(
+        new THREE.Vector3(pos.x - radius, 0, pos.z - radius),
+        new THREE.Vector3(pos.x + radius, 2.0, pos.z + radius)
+      );
+      for (const cBox of colliders) {
+        if (box.intersectsBox(cBox)) return true;
+      }
+      return false;
+    }
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      const forwardInput = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
+      const turnInput = (keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
+
+      if (!inCar) {
+        // Piyada hərəkəti
+        const moveSpeed = 7.5;
+        if (forwardInput !== 0 || turnInput !== 0) {
+          const moveDir = new THREE.Vector3(
+            -Math.sin(camYaw) * forwardInput + Math.cos(camYaw) * (-turnInput),
+            0,
+            -Math.cos(camYaw) * forwardInput - Math.sin(camYaw) * (-turnInput)
+          );
+          if (moveDir.lengthSq() > 0) {
+            moveDir.normalize();
+            const nextPos = player.position.clone().addScaledVector(moveDir, moveSpeed * dt);
+            nextPos.x = Math.max(-185, Math.min(185, nextPos.x));
+            nextPos.z = Math.max(-185, Math.min(185, nextPos.z));
+
+            if (!collidesAt(nextPos, 0.55)) {
+              player.position.copy(nextPos);
+            }
+            player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+          }
+        }
+
+        // Maşın promptu
+        let canEnter = false;
+        for (const c of cars) {
+          if (player.position.distanceTo(c.position) < 4.2) {
+            canEnter = true;
+            break;
+          }
+        }
+        promptEl.style.display = canEnter ? 'block' : 'none';
+
+        // Kamera piyadanı izləyir
+        const dist = 7.5;
+        const cx = player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * dist;
+        const cy = player.position.y + Math.sin(camPitch) * dist + 1.5;
+        const cz = player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.18);
+        camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+      } else {
+        // Maşın fizikası
+        promptEl.style.display = 'none';
+        const data = inCar.userData;
+        const accel = 24;
+        const maxSpeed = 28;
+        const drag = 2.2;
+
+        if (forwardInput > 0) {
+          data.speed += accel * dt;
+        } else if (forwardInput < 0) {
+          data.speed -= accel * 0.85 * dt;
+        } else {
+          data.speed -= Math.sign(data.speed) * Math.min(Math.abs(data.speed), drag * dt);
+        }
+
+        data.speed = Math.max(-12, Math.min(maxSpeed, data.speed));
+
+        if (Math.abs(data.speed) > 0.2) {
+          const reverseFactor = data.speed >= 0 ? 1 : -1;
+          inCar.rotation.y += turnInput * 2.1 * dt * reverseFactor;
+        }
+
+        const vel = new THREE.Vector3(
+          Math.sin(inCar.rotation.y) * data.speed * dt,
+          0,
+          Math.cos(inCar.rotation.y) * data.speed * dt
+        );
+
+        const nextCarPos = inCar.position.clone().add(vel);
+        nextCarPos.x = Math.max(-185, Math.min(185, nextCarPos.x));
+        nextCarPos.z = Math.max(-185, Math.min(185, nextCarPos.z));
+
+        if (!collidesAt(nextCarPos, 1.4)) {
+          inCar.position.copy(nextCarPos);
+        } else {
+          data.speed *= -0.35;
+        }
+
+        player.position.copy(inCar.position);
+
+        // Kamera maşını izləyir
+        const camDist = 9.5;
+        const targetYaw = camYaw + inCar.rotation.y + Math.PI;
+        const cx = inCar.position.x + Math.sin(targetYaw) * Math.cos(camPitch) * camDist;
+        const cy = inCar.position.y + Math.sin(camPitch) * camDist + 2.0;
+        const cz = inCar.position.z + Math.cos(targetYaw) * Math.cos(camPitch) * camDist;
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.14);
+        camera.lookAt(inCar.position.x, inCar.position.y + 1.4, inCar.position.z);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
