@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Binə / Binə Sovxoz 3D - Modulyar Versiya</title>
+  <title>Binə / Binə Sovxoz 3D - WASTED & Polis</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -50,9 +50,7 @@
       font-weight: bold;
       color: #52b788;
     }
-    #hpBarWrap {
-      margin-top: 8px;
-    }
+    #hpBarWrap { margin-top: 8px; }
     .barLabel {
       font-size: 11.5px;
       color: #ddd;
@@ -107,7 +105,7 @@
     }
     #toast {
       position: fixed;
-      top: 145px;
+      top: 155px;
       right: 14px;
       z-index: 10;
       background: rgba(0, 0, 0, 0.82);
@@ -119,14 +117,42 @@
       transition: opacity 0.25s;
       pointer-events: none;
     }
+    #wastedScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(90, 0, 0, 0.55);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    #wastedText {
+      font-size: 72px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      color: #ff2a2a;
+      text-shadow: 0 4px 24px rgba(0,0,0,0.9);
+    }
+    #respawnBtn {
+      padding: 12px 26px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      background: #ffd166;
+      color: #111;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="hud">
-    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz (Geniş Xəritə)</div>
+    <div><strong>Ərazi:</strong> Binə / Binə Sovxoz</div>
     <div><strong>Rejim:</strong> <span id="modeLabel">Piyada</span></div>
     <div><strong>Hərəkət:</strong> W A S D | <strong>Qaçış:</strong> Shift | <strong>Tullanma:</strong> Space</div>
-    <div><strong>Vurma (NPC):</strong> Sol Klik | <strong>Kamera:</strong> Sağ Klik sürüklə</div>
+    <div><strong>Vurma:</strong> Sol Klik (3-4 zərbə) | <strong>Kamera:</strong> Sağ Klik sürüklə</div>
     <div><strong>Maşın:</strong> F (min/düş) | <strong>Əl əyləci:</strong> Space (maşında)</div>
   </div>
 
@@ -147,6 +173,11 @@
   <div id="speedBox">Sürət: <span id="speedVal">0</span> km/s</div>
   <div id="prompt">Maşına minmək üçün <strong>F</strong> bas</div>
 
+  <div id="wastedScreen">
+    <div id="wastedText">WASTED</div>
+    <button id="respawnBtn">Yenidən Başla</button>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
@@ -161,9 +192,6 @@
     import { NpcManager } from './npc.js';
     import { createDetailedCar } from './vehicles.js';
 
-    // ==========================================
-    // 1. SƏHNƏ VƏ İŞIQLANDIRMA
-    // ==========================================
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x8ecae6);
     scene.fog = new THREE.Fog(0x8ecae6, 130, 360);
@@ -229,9 +257,7 @@
       return false;
     }
 
-    // ==========================================
-    // 2. BÖYÜDÜLMÜŞ BİNƏ / BİNƏ SOVXOZ XƏRİTƏSİ
-    // ==========================================
+    // Xəritə
     const roadMat = new THREE.MeshStandardMaterial({ color: 0x2c3035, roughness: 0.9 });
     const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x8d9299, roughness: 0.9 });
     const lineMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.7 });
@@ -338,18 +364,19 @@
       }
     }
 
-    // ==========================================
-    // 3. PUL, ULDUZ (WANTED) VƏ HİSSƏCİKLƏR
-    // ==========================================
+    // Oyun vəziyyəti, Pul, Can, WASTED
     let playerMoney = 0;
     let playerHp = 100;
     let wantedLevel = 0;
     let wantedDecayTimer = 0;
+    let isWasted = false;
 
     const wantedStarsEl = document.getElementById('wantedStars');
     const moneyDisplay  = document.getElementById('moneyDisplay');
     const playerHpText  = document.getElementById('playerHpText');
     const playerHpBar   = document.getElementById('playerHpBar');
+    const wastedScreen  = document.getElementById('wastedScreen');
+    const respawnBtn    = document.getElementById('respawnBtn');
     const toastEl       = document.getElementById('toast');
     let toastTimer = null;
 
@@ -370,20 +397,36 @@
       updateWantedUI();
     }
 
-    function damagePlayer(dmg) {
-      playerHp = Math.max(0, playerHp - dmg);
-      playerHpText.textContent = `${playerHp}%`;
+    function setPlayerHp(val) {
+      playerHp = Math.max(0, Math.min(100, val));
+      playerHpText.textContent = `${Math.round(playerHp)}%`;
       playerHpBar.style.width = `${playerHp}%`;
-      if (playerHp <= 0) {
-        playerHp = 100;
-        playerHpText.textContent = '100%';
-        playerHpBar.style.width = '100%';
-        wantedLevel = 0;
-        updateWantedUI();
-        player.position.set(4, 0, 8);
-        showToast('Xəstəxana/Baza: Ulduzlar sıfırlandı');
+      if (playerHp <= 0 && !isWasted) {
+        triggerWasted();
       }
     }
+
+    function triggerWasted() {
+      isWasted = true;
+      wastedScreen.style.display = 'flex';
+    }
+
+    respawnBtn.addEventListener('click', () => {
+      isWasted = false;
+      wastedScreen.style.display = 'none';
+      setPlayerHp(100);
+      wantedLevel = 0;
+      updateWantedUI();
+      if (inCar) {
+        inCar = null;
+        modeLabel.textContent = 'Piyada';
+        speedBox.style.display = 'none';
+        carHpWrap.style.display = 'none';
+      }
+      player.visible = true;
+      player.position.set(4, 0, 8);
+      playerVy = 0;
+    });
 
     const cashDrops = [];
     const cashGeo = new THREE.BoxGeometry(0.65, 0.06, 0.32);
@@ -400,36 +443,47 @@
     }
 
     const particles = [];
+    const tracers = [];
     let cameraShake = 0;
 
-    function spawnCrashEffect(pos, intensity = 1) {
-      cameraShake = Math.min(0.65, 0.18 * intensity);
-      const count = Math.min(24, Math.floor(8 + intensity * 6));
+    function spawnTracer(fromPos, toPos) {
+      const points = [fromPos.clone(), toPos.clone()];
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      const mat = new THREE.LineBasicMaterial({ color: 0xffd166 });
+      const line = new THREE.Line(geo, mat);
+      scene.add(line);
+      tracers.push({ line, life: 0.08 });
+    }
+
+    function spawnCrashEffect(pos, intensity = 1, isExplosion = false) {
+      cameraShake = Math.min(1.1, (isExplosion ? 0.85 : 0.18) * intensity);
+      const count = isExplosion ? 36 : Math.min(24, Math.floor(8 + intensity * 6));
       for (let i = 0; i < count; i++) {
-        const isSpark = i % 2 === 0;
+        const isFire = isExplosion && i < 20;
+        const isSpark = !isFire && i % 2 === 0;
+        const col = isFire ? (i % 2 === 0 ? 0xff4500 : 0xffbe0b) : (isSpark ? 0xffb703 : 0x444444);
+        const size = isFire ? 0.65 : (isSpark ? 0.16 : 0.4);
         const pMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(isSpark ? 0.14 : 0.35, isSpark ? 0.14 : 0.35, isSpark ? 0.14 : 0.35),
-          new THREE.MeshBasicMaterial({ color: isSpark ? 0xffb703 : 0x555555 })
+          new THREE.BoxGeometry(size, size, size),
+          new THREE.MeshBasicMaterial({ color: col })
         );
         pMesh.position.copy(pos);
-        pMesh.position.y += 0.8;
+        pMesh.position.y += 0.9;
         scene.add(pMesh);
         particles.push({
           mesh: pMesh,
           vel: new THREE.Vector3(
-            (Math.random() - 0.5) * 9 * intensity,
-            Math.random() * 4 + 2,
-            (Math.random() - 0.5) * 9 * intensity
+            (Math.random() - 0.5) * (isExplosion ? 16 : 9) * intensity,
+            Math.random() * (isExplosion ? 9 : 4) + 2,
+            (Math.random() - 0.5) * (isExplosion ? 16 : 9) * intensity
           ),
-          life: 0.45 + Math.random() * 0.35,
-          isSpark
+          life: (isExplosion ? 0.85 : 0.5) + Math.random() * 0.35,
+          isSpark: isSpark || isFire
         });
       }
     }
 
-    // ==========================================
-    // 4. OYUNÇU, NPC MODULU VƏ MAŞINLAR
-    // ==========================================
+    // Oyunçu, NPC-lər və Maşınlar
     const player = createDetailedHuman({
       shirtColor: 0x1e6091,
       pantsColor: 0x1b263b,
@@ -441,7 +495,10 @@
 
     let playerVy = 0;
 
-    const npcManager = new NpcManager(scene, collidesAt);
+    const npcManager = new NpcManager(scene, collidesAt, (fromPos, toPos) => {
+      spawnTracer(fromPos, toPos);
+    });
+
     const npcSpots = [
       [-45, 8], [-15, -8], [18, 8], [42, -8], [-8, 35], [8, -42],
       [-68, 25], [68, -28], [-52, 68], [52, -68], [-22, 52], [25, -52],
@@ -466,8 +523,63 @@
     registerCar(createDetailedCar(123.2, -60, 0, { bodyColor: 0x9b5de5, isTraffic: true }));
     registerCar(createDetailedCar(-123.2, 60, Math.PI, { bodyColor: 0xf15bb5, isTraffic: true }));
 
-    let policeSpawnCooldown = 0;
+    function exitOccupantFromCar(car, forcePolice = false) {
+      const d = car.userData;
+      if (d.occupantsLeft <= 0) return;
+      d.occupantsLeft--;
+      const sideOffset = new THREE.Vector3(-2.3, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.rotation.y);
+      const ex = car.position.x + sideOffset.x;
+      const ez = car.position.z + sideOffset.z;
+      const spawned = npcManager.spawnNpc(ex, ez, Math.floor(Math.random() * 20), forcePolice || d.isPolice);
+      if (forcePolice || d.isPolice) {
+        spawned.state = 'chase';
+        spawned.stateTimer = 10;
+      }
+    }
 
+    function explodeCar(car) {
+      const d = car.userData;
+      if (d.exploded) return;
+      d.exploded = true;
+      d.wrecked = true;
+      d.speed = 0;
+      d.hp = 0;
+      d.mainMat.color.setHex(0x141414);
+      d.hoodMat.color.setHex(0x0d0d0d);
+
+      spawnCrashEffect(car.position, 1.8, true);
+      showToast('Maşın partladı!');
+
+      // Maşın partlayanda içindəyiksə WASTED
+      if (inCar === car) {
+        setPlayerHp(0);
+      } else {
+        const dist = player.position.distanceTo(car.position);
+        if (dist < 7.5 && !inCar) {
+          setPlayerHp(playerHp - Math.round((7.5 - dist) * 14));
+        }
+      }
+    }
+
+    function applyCarDamage(car, damage, impactPoint, pushVec) {
+      const d = car.userData;
+      if (d.exploded) return;
+
+      d.hp = Math.max(0, d.hp - damage);
+      if (pushVec) d.knockVel.add(pushVec);
+      spawnCrashEffect(impactPoint, Math.min(2.2, damage / 18), false);
+
+      const dmgRatio = 1 - d.hp / d.maxHp;
+      d.hood.rotation.x = -dmgRatio * 0.28;
+      d.hood.position.y = 0.94 + dmgRatio * 0.08;
+      d.hoodMat.color.setHex(d.baseColor).lerp(new THREE.Color(0x222222), dmgRatio * 0.65);
+
+      if (d.hp <= 0) {
+        explodeCar(car);
+      }
+    }
+
+    let policeSpawnCooldown = 0;
     function spawnPoliceUnit(nearPos) {
       const angle = Math.random() * Math.PI * 2;
       const dist = 36 + Math.random() * 14;
@@ -479,37 +591,9 @@
         isTraffic: false
       }));
       pCar.userData.isPoliceChaser = true;
-
-      npcManager.spawnNpc(sx + 2.2, sz, 0, true);
     }
 
-    function applyCarDamage(car, damage, impactPoint, pushVec) {
-      const d = car.userData;
-      if (d.wrecked) return;
-
-      d.hp = Math.max(0, d.hp - damage);
-      if (pushVec) d.knockVel.add(pushVec);
-      spawnCrashEffect(impactPoint, Math.min(2.2, damage / 18));
-
-      const dmgRatio = 1 - d.hp / d.maxHp;
-      d.hood.rotation.x = -dmgRatio * 0.28;
-      d.hood.position.y = 0.94 + dmgRatio * 0.08;
-      d.hoodMat.color.setHex(d.baseColor).lerp(new THREE.Color(0x222222), dmgRatio * 0.65);
-
-      if (d.hp <= 0) {
-        d.wrecked = true;
-        d.speed = 0;
-        d.mainMat.color.setHex(0x1f1f1f);
-        d.hoodMat.color.setHex(0x111111);
-        if (car === inCar) {
-          showToast('Maşın sıradan çıxdı! Düşüb başqa maşına min (F).');
-        }
-      }
-    }
-
-    // ==========================================
-    // 5. İDARƏETMƏ: SOL KLİK VURMA, SAĞ KLİK KAMERA
-    // ==========================================
+    // İdarəetmə: Sol Klik = Vurma, Sağ Klik = Kamera
     const keys = {};
     let inCar = null;
     let camYaw = 0;
@@ -526,7 +610,7 @@
     const carHpBar  = document.getElementById('carHpBar');
 
     function performLeftClickAttack() {
-      if (inCar) return;
+      if (inCar || isWasted) return;
       player.userData.triggerAttack();
       const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
 
@@ -535,12 +619,14 @@
         const toNpc = npc.mesh.position.clone().sub(player.position);
         toNpc.y = 0;
         const dist = toNpc.length();
-        if (dist < 2.35) {
+        if (dist < 2.4) {
           toNpc.normalize();
           if (forward.dot(toNpc) > 0.2) {
             addWanted(1);
             npcManager.alertNearby(npc.mesh.position, player.position, wantedLevel);
-            npcManager.damageNpc(npc, 50, forward, (killedNpc, kDir) => {
+            // Bir vuruşda ölmür: mülki 34 zərbə (~3 vuruş), polis 30 zərbə (~6 vuruş)
+            const dmg = npc.isPolice ? 30 : 34;
+            npcManager.damageNpc(npc, dmg, forward, (killedNpc) => {
               addWanted(1);
               spawnCash(killedNpc.mesh.position.x, killedNpc.mesh.position.z);
             });
@@ -550,12 +636,13 @@
     }
 
     window.addEventListener('keydown', (e) => {
+      if (isWasted) return;
       const k = e.key.toLowerCase();
       keys[k] = true;
       if (e.code === 'Space') {
         keys['space'] = true;
         if (!inCar && player.position.y <= 0.001 && playerVy === 0) {
-          playerVy = 6.8; // Piyada tullanması
+          playerVy = 6.8;
         }
       }
 
@@ -574,7 +661,7 @@
           let nearest = null;
           let minDist = 4.4;
           for (const c of cars) {
-            if (c.userData.wrecked) continue;
+            if (c.userData.exploded) continue;
             const dist = player.position.distanceTo(c.position);
             if (dist < minDist) {
               minDist = dist;
@@ -584,6 +671,7 @@
           if (nearest) {
             inCar = nearest;
             inCar.userData.isTraffic = false;
+            inCar.userData.isPoliceChaser = false;
             player.visible = false;
             modeLabel.textContent = 'Maşında';
             speedBox.style.display = 'block';
@@ -607,6 +695,7 @@
     renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
     renderer.domElement.addEventListener('mousedown', (e) => {
+      if (isWasted) return;
       if (e.button === 0) {
         performLeftClickAttack();
       } else if (e.button === 2) {
@@ -631,17 +720,13 @@
       camPitch = Math.max(0.08, Math.min(1.15, camPitch + dy * 0.005));
     });
 
-    // ==========================================
-    // 6. OYUN DÖVRÜ (ANIMATION LOOP)
-    // ==========================================
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
 
-      // Ulduzların vaxtla sönməsi
-      if (wantedLevel > 0) {
+      if (wantedLevel > 0 && !isWasted) {
         wantedDecayTimer -= dt;
         if (wantedDecayTimer <= 0) {
           wantedLevel = Math.max(0, wantedLevel - 1);
@@ -650,10 +735,9 @@
         }
       }
 
-      // Polis maşınlarının yaranması
-      if (wantedLevel > 0) {
+      if (wantedLevel > 0 && !isWasted) {
         policeSpawnCooldown -= dt;
-        const activePoliceCars = cars.filter(c => c.userData.isPoliceChaser && !c.userData.wrecked).length;
+        const activePoliceCars = cars.filter(c => c.userData.isPoliceChaser && !c.userData.exploded).length;
         const maxPoliceCars = Math.min(4, wantedLevel);
         if (policeSpawnCooldown <= 0 && activePoliceCars < maxPoliceCars) {
           const targetPos = inCar ? inCar.position : player.position;
@@ -662,13 +746,13 @@
         }
       }
 
-      const forwardInput = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
-      const turnInput    = (keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
-      const isRunning    = Boolean(keys['shift']);
-      const isBraking    = Boolean(keys['space']);
+      const forwardInput = isWasted ? 0 : ((keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0));
+      const turnInput    = isWasted ? 0 : ((keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0));
+      const isRunning    = !isWasted && Boolean(keys['shift']);
+      const isBraking    = !isWasted && Boolean(keys['space']);
 
       // Oyunçu hərəkəti
-      if (!inCar) {
+      if (!inCar && !isWasted) {
         let speedRatio = 0;
         const moveSpeed = isRunning ? 10.8 : 6.0;
 
@@ -693,13 +777,28 @@
           }
         }
 
-        // Cazibə qüvvəsi və tullanma
         if (player.position.y > 0 || playerVy !== 0) {
           playerVy -= 17.5 * dt;
           player.position.y += playerVy * dt;
           if (player.position.y <= 0) {
             player.position.y = 0;
             playerVy = 0;
+          }
+        }
+
+        // Piyada olanda maşın sürətlə üstünə gəlsə hasar verir
+        for (const c of cars) {
+          if (Math.abs(c.userData.speed) > 6.5) {
+            const dist = player.position.distanceTo(c.position);
+            if (dist < 2.2) {
+              setPlayerHp(playerHp - Math.round(Math.abs(c.userData.speed) * 1.1));
+              const push = player.position.clone().sub(c.position).setY(0).normalize();
+              const pNext = player.position.clone().addScaledVector(push, 1.4);
+              if (!collidesAt(pNext, 0.42)) {
+                player.position.x = pNext.x;
+                player.position.z = pNext.z;
+              }
+            }
           }
         }
 
@@ -710,17 +809,17 @@
 
         let canEnter = false;
         for (const c of cars) {
-          if (!c.userData.wrecked && player.position.distanceTo(c.position) < 4.4) {
+          if (!c.userData.exploded && player.position.distanceTo(c.position) < 4.4) {
             canEnter = true;
             break;
           }
         }
         promptEl.style.display = canEnter ? 'block' : 'none';
-      } else {
+      } else if (inCar && !isWasted) {
         promptEl.style.display = 'none';
         const data = inCar.userData;
 
-        if (!data.wrecked) {
+        if (!data.exploded) {
           const accel = 27;
           const maxSpeed = 32;
           const naturalFriction = 14;
@@ -765,7 +864,9 @@
         } else {
           const impactSpeed = Math.abs(data.speed);
           if (impactSpeed > 7) {
-            applyCarDamage(inCar, Math.round((impactSpeed - 5) * 1.8), inCar.position, null);
+            const dmg = Math.round((impactSpeed - 5) * 2.2);
+            applyCarDamage(inCar, dmg, inCar.position, null);
+            if (impactSpeed > 18) setPlayerHp(playerHp - Math.round((impactSpeed - 16) * 1.2));
           }
           data.speed = -data.speed * 0.25;
         }
@@ -779,7 +880,7 @@
         carHpBar.style.background = hpPct > 50 ? '#52b788' : (hpPct > 25 ? '#f4a261' : '#e63946');
       }
 
-      // Avtomobillər (Trafik + Polis təqibi + Miqalka + Avariya)
+      // Maşınlar (Trafik + Polis təqibi + Maşından düşmə + Avariya)
       const nowSec = performance.now() * 0.001;
       const targetPos = inCar ? inCar.position : player.position;
 
@@ -787,19 +888,19 @@
         const c = cars[i];
         const d = c.userData;
 
-        if (d.isPolice && d.sirenRed && d.sirenBlue) {
+        if (d.isPolice && d.sirenRed && d.sirenBlue && !d.exploded) {
           const flash = Math.sin(nowSec * 14) > 0;
           d.sirenRed.material.color.setHex(flash ? 0xff1e42 : 0x550011);
           d.sirenBlue.material.color.setHex(!flash ? 0x1e90ff : 0x001a44);
         }
 
-        if (d.hp < 55) {
+        if (d.hp < 55 && !d.exploded) {
           d.smokeTimer -= dt;
           if (d.smokeTimer <= 0) {
-            d.smokeTimer = d.wrecked ? 0.08 : 0.22;
+            d.smokeTimer = 0.2;
             const sMesh = new THREE.Mesh(
               new THREE.BoxGeometry(0.45, 0.45, 0.45),
-              new THREE.MeshBasicMaterial({ color: d.wrecked ? 0x222222 : 0x777777 })
+              new THREE.MeshBasicMaterial({ color: 0x555555 })
             );
             sMesh.position.copy(c.position).add(new THREE.Vector3(0, 1.3, 1.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.rotation.y));
             scene.add(sMesh);
@@ -812,11 +913,31 @@
           }
         }
 
-        if (d.isPoliceChaser && !d.wrecked && wantedLevel > 0) {
+        // Polis maşınından polislərin düşməsi
+        if (d.isPoliceChaser && !d.exploded && d.occupantsLeft > 0) {
+          const distToP = c.position.distanceTo(targetPos);
+          if (distToP < 24) {
+            d.speed *= 0.85;
+            if (d.speed < 2.5) {
+              exitOccupantFromCar(c, true);
+            }
+          }
+        }
+
+        // Trafik maşınlarından vaxtaşırı adam düşməsi
+        if (d.isTraffic && !d.exploded && c !== inCar && d.occupantsLeft > 0) {
+          d.exitTimer -= dt;
+          if (d.exitTimer <= 0) {
+            d.exitTimer = 10 + Math.random() * 12;
+            exitOccupantFromCar(c, false);
+          }
+        }
+
+        if (d.isPoliceChaser && !d.exploded && wantedLevel > 0) {
           const toTarget = targetPos.clone().sub(c.position);
           toTarget.y = 0;
           const dist = toTarget.length();
-          if (dist > 3.2) {
+          if (dist > 4.5) {
             const desiredAngle = Math.atan2(toTarget.x, toTarget.z);
             let diffAngle = desiredAngle - c.rotation.y;
             while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
@@ -838,7 +959,7 @@
             c.rotation.y += 0.9;
             d.speed *= 0.5;
           }
-        } else if (d.isTraffic && !d.wrecked && c !== inCar) {
+        } else if (d.isTraffic && !d.exploded && c !== inCar) {
           const forward = new THREE.Vector3(Math.sin(c.rotation.y), 0, Math.cos(c.rotation.y));
           const nextPos = c.position.clone().addScaledVector(forward, d.speed * dt).addScaledVector(d.knockVel, dt);
           d.knockVel.multiplyScalar(0.85);
@@ -871,11 +992,15 @@
             const relSpeed = v1.sub(v2).length();
 
             if (relSpeed > 4.5) {
-              const dmg = Math.round(relSpeed * 1.4);
+              const dmg = Math.round(relSpeed * 1.8);
               const midPoint = c.position.clone().add(c2.position).multiplyScalar(0.5);
               applyCarDamage(c, dmg, midPoint, normal.clone().multiplyScalar(-relSpeed * 0.65));
               applyCarDamage(c2, dmg, midPoint, normal.clone().multiplyScalar(relSpeed * 0.65));
-              if (c === inCar || c2 === inCar) addWanted(1);
+
+              if ((c === inCar || c2 === inCar) && !isWasted) {
+                addWanted(1);
+                if (relSpeed > 14) setPlayerHp(playerHp - Math.round((relSpeed - 12) * 1.3));
+              }
               c.userData.speed *= 0.3;
               c2.userData.speed *= 0.3;
             }
@@ -890,9 +1015,9 @@
         wantedLevel,
         cars,
         onPlayerHit: (dmg) => {
-          if (!inCar) damagePlayer(dmg);
+          if (!inCar && !isWasted) setPlayerHp(playerHp - dmg);
         },
-        onKillNpc: (killedNpc, knockDir) => {
+        onKillNpc: (killedNpc) => {
           addWanted(1);
           spawnCash(killedNpc.mesh.position.x, killedNpc.mesh.position.z);
         }
@@ -916,7 +1041,16 @@
         }
       }
 
-      // Hissəciklər
+      // Güllə xətləri və hissəciklər
+      for (let i = tracers.length - 1; i >= 0; i--) {
+        tracers[i].life -= dt;
+        if (tracers[i].life <= 0) {
+          scene.remove(tracers[i].line);
+          tracers[i].line.geometry.dispose();
+          tracers.splice(i, 1);
+        }
+      }
+
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life -= dt;
