@@ -121,29 +121,54 @@
       position: fixed;
       inset: 0;
       z-index: 30;
-      background: rgba(90, 0, 0, 0.55);
+      background: radial-gradient(circle, rgba(110, 0, 0, 0.25) 0%, rgba(25, 0, 0, 0.82) 100%);
       display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
+      gap: 24px;
+      opacity: 0;
+      transition: opacity 0.65s ease;
+    }
+    #wastedScreen.active {
+      display: flex;
+      opacity: 1;
     }
     #wastedText {
-      font-size: 72px;
+      font-size: 84px;
       font-weight: 900;
-      letter-spacing: 8px;
-      color: #ff2a2a;
-      text-shadow: 0 4px 24px rgba(0,0,0,0.9);
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      letter-spacing: 26px;
+      color: #d90429;
+      text-shadow: 0 6px 28px rgba(0, 0, 0, 0.95);
+      transform: scale(1.45);
+      opacity: 0;
+      transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), letter-spacing 0.85s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease;
+    }
+    #wastedScreen.show-text #wastedText {
+      transform: scale(1);
+      letter-spacing: 10px;
+      opacity: 1;
     }
     #respawnBtn {
-      padding: 12px 26px;
+      padding: 12px 28px;
       font-size: 16px;
       font-weight: bold;
-      border: none;
-      border-radius: 8px;
-      background: #ffd166;
-      color: #111;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      background: rgba(15, 15, 15, 0.85);
+      color: #fff;
       cursor: pointer;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 0.4s ease, transform 0.4s ease, background 0.2s ease;
+    }
+    #wastedScreen.show-btn #respawnBtn {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #respawnBtn:hover {
+      background: #d90429;
     }
   </style>
 </head>
@@ -370,6 +395,8 @@
     let wantedLevel = 0;
     let wantedDecayTimer = 0;
     let isWasted = false;
+    let wastedTextTimeout = null;
+    let wastedBtnTimeout = null;
 
     const wantedStarsEl = document.getElementById('wantedStars');
     const moneyDisplay  = document.getElementById('moneyDisplay');
@@ -408,11 +435,28 @@
 
     function triggerWasted() {
       isWasted = true;
+      clearTimeout(wastedTextTimeout);
+      clearTimeout(wastedBtnTimeout);
+
+      wastedScreen.classList.remove('active', 'show-text', 'show-btn');
       wastedScreen.style.display = 'flex';
+
+      requestAnimationFrame(() => {
+        wastedScreen.classList.add('active');
+        wastedTextTimeout = setTimeout(() => {
+          wastedScreen.classList.add('show-text');
+        }, 120);
+        wastedBtnTimeout = setTimeout(() => {
+          wastedScreen.classList.add('show-btn');
+        }, 1100);
+      });
     }
 
     respawnBtn.addEventListener('click', () => {
+      clearTimeout(wastedTextTimeout);
+      clearTimeout(wastedBtnTimeout);
       isWasted = false;
+      wastedScreen.classList.remove('active', 'show-text', 'show-btn');
       wastedScreen.style.display = 'none';
       setPlayerHp(100);
       wantedLevel = 0;
@@ -550,7 +594,6 @@
       spawnCrashEffect(car.position, 1.8, true);
       showToast('Maşın partladı!');
 
-      // Maşın partlayanda içindəyiksə WASTED
       if (inCar === car) {
         setPlayerHp(0);
       } else {
@@ -593,7 +636,6 @@
       pCar.userData.isPoliceChaser = true;
     }
 
-    // İdarəetmə: Sol Klik = Vurma, Sağ Klik = Kamera
     const keys = {};
     let inCar = null;
     let camYaw = 0;
@@ -624,7 +666,6 @@
           if (forward.dot(toNpc) > 0.2) {
             addWanted(1);
             npcManager.alertNearby(npc.mesh.position, player.position, wantedLevel);
-            // Bir vuruşda ölmür: mülki 34 zərbə (~3 vuruş), polis 30 zərbə (~6 vuruş)
             const dmg = npc.isPolice ? 30 : 34;
             npcManager.damageNpc(npc, dmg, forward, (killedNpc) => {
               addWanted(1);
@@ -751,7 +792,6 @@
       const isRunning    = !isWasted && Boolean(keys['shift']);
       const isBraking    = !isWasted && Boolean(keys['space']);
 
-      // Oyunçu hərəkəti
       if (!inCar && !isWasted) {
         let speedRatio = 0;
         const moveSpeed = isRunning ? 10.8 : 6.0;
@@ -786,7 +826,6 @@
           }
         }
 
-        // Piyada olanda maşın sürətlə üstünə gəlsə hasar verir
         for (const c of cars) {
           if (Math.abs(c.userData.speed) > 6.5) {
             const dist = player.position.distanceTo(c.position);
@@ -880,7 +919,6 @@
         carHpBar.style.background = hpPct > 50 ? '#52b788' : (hpPct > 25 ? '#f4a261' : '#e63946');
       }
 
-      // Maşınlar (Trafik + Polis təqibi + Maşından düşmə + Avariya)
       const nowSec = performance.now() * 0.001;
       const targetPos = inCar ? inCar.position : player.position;
 
@@ -913,7 +951,6 @@
           }
         }
 
-        // Polis maşınından polislərin düşməsi
         if (d.isPoliceChaser && !d.exploded && d.occupantsLeft > 0) {
           const distToP = c.position.distanceTo(targetPos);
           if (distToP < 24) {
@@ -924,7 +961,6 @@
           }
         }
 
-        // Trafik maşınlarından vaxtaşırı adam düşməsi
         if (d.isTraffic && !d.exploded && c !== inCar && d.occupantsLeft > 0) {
           d.exitTimer -= dt;
           if (d.exitTimer <= 0) {
@@ -975,7 +1011,6 @@
           d.knockVel.multiplyScalar(0.85);
         }
 
-        // Maşın - Maşın avariyası
         for (let j = i + 1; j < cars.length; j++) {
           const c2 = cars[j];
           const diff = c2.position.clone().sub(c.position);
@@ -1008,7 +1043,6 @@
         }
       }
 
-      // NPC modulu yenilənməsi
       npcManager.update(dt, {
         playerPos: player.position,
         playerInCar: Boolean(inCar),
@@ -1023,7 +1057,6 @@
         }
       });
 
-      // Pulların yığılması
       const collectorPos = inCar ? inCar.position : player.position;
       const collectRadius = inCar ? 2.6 : 1.5;
 
@@ -1041,7 +1074,6 @@
         }
       }
 
-      // Güllə xətləri və hissəciklər
       for (let i = tracers.length - 1; i >= 0; i--) {
         tracers[i].life -= dt;
         if (tracers[i].life <= 0) {
@@ -1064,7 +1096,6 @@
         p.mesh.scale.multiplyScalar(0.95);
       }
 
-      // Kamera
       let shakeVec = new THREE.Vector3();
       if (cameraShake > 0) {
         cameraShake = Math.max(0, cameraShake - dt * 1.8);
