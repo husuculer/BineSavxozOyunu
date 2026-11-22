@@ -17,7 +17,6 @@ export function createDetailedHuman(options = {}) {
   const shoeMat  = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.55 });
   const beltMat  = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.3 });
 
-  // Gövdə + Yaxa + Kəmər
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.44, 0.3), shirtMat);
   chest.position.y = 1.28;
   chest.castShadow = true;
@@ -42,13 +41,11 @@ export function createDetailedHuman(options = {}) {
     root.add(badge);
   }
 
-  // Boyun
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.1, 0.13, 12), skinMat);
   neck.position.y = 1.56;
   neck.castShadow = true;
   root.add(neck);
 
-  // Baş (kəllə, saç, qaş, göz, burun, polis papağı varsa)
   const headPivot = new THREE.Group();
   headPivot.position.y = 1.78;
 
@@ -98,7 +95,6 @@ export function createDetailedHuman(options = {}) {
 
   root.add(headPivot);
 
-  // Qollar (Çiyin + Üst qol + Dirsək + Bilək/Yumruq)
   function createArm(side) {
     const shoulder = new THREE.Group();
     shoulder.position.set(side * 0.35, 1.44, 0);
@@ -126,14 +122,28 @@ export function createDetailedHuman(options = {}) {
     elbow.add(fist);
 
     shoulder.add(elbow);
-    return { shoulder, elbow };
+    return { shoulder, elbow, fist };
   }
 
   const leftArm = createArm(-1);
   const rightArm = createArm(1);
   root.add(leftArm.shoulder, rightArm.shoulder);
 
-  // Ayaqlar (Omba + Bud + Diz + Baldır + Ayaqqabı)
+  // Polis üçün silah (sağ əldə)
+  let gunGroup = null;
+  if (isPolice) {
+    gunGroup = new THREE.Group();
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7, roughness: 0.3 });
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.42), gunMat);
+    slide.position.set(0, 0, 0.14);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), gunMat);
+    grip.position.set(0, -0.08, 0.02);
+    grip.rotation.x = 0.25;
+    gunGroup.add(slide, grip);
+    gunGroup.position.set(0, -0.32, 0.06);
+    rightArm.elbow.add(gunGroup);
+  }
+
   function createLeg(side) {
     const hip = new THREE.Group();
     hip.position.set(side * 0.14, 0.8, 0);
@@ -166,31 +176,69 @@ export function createDetailedHuman(options = {}) {
   const rightLeg = createLeg(1);
   root.add(leftLeg.hip, rightLeg.hip);
 
-  let animPhase = Math.random() * 10;
+  let animPhase = Math.random() * 12;
+  let idlePhase = Math.random() * 10;
   let attackTimer = 0;
+  let hitFlashTimer = 0;
 
   root.userData.triggerAttack = () => {
-    attackTimer = 0.32;
+    attackTimer = 0.34;
   };
 
-  root.userData.updatePose = (dt, { speedRatio = 0, isAirborne = false, isAttacking = false }) => {
-    if (isAttacking && attackTimer <= 0) {
-      attackTimer = 0.32;
-    }
+  root.userData.triggerHitReact = () => {
+    hitFlashTimer = 0.25;
+  };
+
+  root.userData.updatePose = (
+    dt,
+    { speedRatio = 0, isAirborne = false, isAttacking = false, isAiming = false, isCowering = false }
+  ) => {
+    idlePhase += dt * 2.2;
+    if (isAttacking && attackTimer <= 0) attackTimer = 0.34;
+    if (hitFlashTimer > 0) hitFlashTimer -= dt;
+
+    // Vurulanda geri çəkilmə / sarsılma
+    const recoil = hitFlashTimer > 0 ? Math.sin((hitFlashTimer / 0.25) * Math.PI) * -0.28 : 0;
+    chest.rotation.x = recoil;
 
     if (attackTimer > 0) {
       attackTimer -= dt;
-      const p = 1 - attackTimer / 0.32;
+      const p = 1 - attackTimer / 0.34;
       const thrust = Math.sin(p * Math.PI);
-      rightArm.shoulder.rotation.x = -Math.PI * 0.55 * thrust;
-      rightArm.elbow.rotation.x = -0.5 * (1 - thrust);
-      leftArm.shoulder.rotation.x = 0.35 * thrust;
+      rightArm.shoulder.rotation.x = -Math.PI * 0.52 * thrust;
+      rightArm.elbow.rotation.x = -0.45 * (1 - thrust);
+      leftArm.shoulder.rotation.x = 0.32 * thrust;
       chest.rotation.y = -0.25 * thrust;
       return;
     }
 
+    if (isAiming && isPolice) {
+      rightArm.shoulder.rotation.x = -Math.PI * 0.45;
+      rightArm.shoulder.rotation.y = -0.15;
+      rightArm.elbow.rotation.x = -0.1;
+      chest.rotation.y = -0.2;
+      headPivot.rotation.y = 0.2;
+      return;
+    }
+
+    if (isCowering) {
+      leftArm.shoulder.rotation.x = -1.65;
+      leftArm.shoulder.rotation.z = -0.45;
+      leftArm.elbow.rotation.x = -1.3;
+      rightArm.shoulder.rotation.x = -1.65;
+      rightArm.shoulder.rotation.z = 0.45;
+      rightArm.elbow.rotation.x = -1.3;
+      headPivot.rotation.x = 0.25;
+      headPivot.rotation.y = Math.sin(idlePhase * 3.5) * 0.25;
+      return;
+    }
+
     chest.rotation.y *= 0.8;
+    rightArm.shoulder.rotation.y *= 0.8;
+    rightArm.shoulder.rotation.z *= 0.8;
+    leftArm.shoulder.rotation.z *= 0.8;
     rightArm.elbow.rotation.x *= 0.8;
+    headPivot.rotation.x *= 0.8;
 
     if (isAirborne) {
       leftLeg.hip.rotation.x = 0.55;
@@ -218,6 +266,8 @@ export function createDetailedHuman(options = {}) {
       leftArm.elbow.rotation.x = -0.25;
       rightArm.elbow.rotation.x = -0.25;
 
+      headPivot.rotation.y = Math.sin(animPhase * 0.5) * 0.08;
+
       const bob = Math.abs(Math.cos(animPhase)) * (0.025 + speedRatio * 0.03);
       chest.position.y = 1.28 + bob;
       abdomen.position.y = 0.96 + bob;
@@ -225,20 +275,20 @@ export function createDetailedHuman(options = {}) {
       neck.position.y = 1.56 + bob;
       headPivot.position.y = 1.78 + bob;
     } else {
-      leftLeg.hip.rotation.x *= 0.75;
-      rightLeg.hip.rotation.x *= 0.75;
-      leftLeg.knee.rotation.x *= 0.75;
-      rightLeg.knee.rotation.x *= 0.75;
-      leftArm.shoulder.rotation.x *= 0.75;
-      rightArm.shoulder.rotation.x *= 0.75;
-      leftArm.elbow.rotation.x *= 0.75;
-      rightArm.elbow.rotation.x *= 0.75;
+      // Dayananda da canlı hərəkət (nəfəsalma + ətrafa baxış + qolların yüngül tərpənməsi)
+      leftLeg.hip.rotation.x *= 0.78;
+      rightLeg.hip.rotation.x *= 0.78;
+      leftLeg.knee.rotation.x *= 0.78;
+      rightLeg.knee.rotation.x *= 0.78;
 
-      chest.position.y = 1.28;
-      abdomen.position.y = 0.96;
-      belt.position.y = 0.83;
-      neck.position.y = 1.56;
-      headPivot.position.y = 1.78;
+      const breath = Math.sin(idlePhase) * 0.015;
+      chest.position.y = 1.28 + breath;
+      neck.position.y = 1.56 + breath;
+      headPivot.position.y = 1.78 + breath;
+      headPivot.rotation.y = Math.sin(idlePhase * 0.65) * 0.32;
+
+      leftArm.shoulder.rotation.x = Math.sin(idlePhase * 0.8) * 0.06;
+      rightArm.shoulder.rotation.x = -Math.sin(idlePhase * 0.8) * 0.06;
     }
   };
 
