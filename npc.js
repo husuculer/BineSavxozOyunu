@@ -12,9 +12,10 @@ const CIVILIAN_STYLES = [
 ];
 
 export class NpcManager {
-  constructor(scene, collidesAt) {
+  constructor(scene, collidesAt, onShootTracer) {
     this.scene = scene;
     this.collidesAt = collidesAt;
+    this.onShootTracer = onShootTracer;
     this.npcs = [];
   }
 
@@ -31,18 +32,19 @@ export class NpcManager {
     const npc = {
       mesh,
       isPolice,
-      hp: isPolice ? 150 : 100,
+      hp: isPolice ? 160 : 100,
       dead: false,
-      respawnTimer: 16,
+      respawnTimer: 18,
       spawnPos: new THREE.Vector3(x, 0, z),
-      state: 'walk', // 'walk' | 'flee' | 'chase' | 'attack'
+      state: 'walk', // 'walk' | 'idle' | 'flee' | 'cower' | 'chase'
+      stateTimer: 1.5 + Math.random() * 3.5,
       dirAngle: Math.random() * Math.PI * 2,
-      turnTimer: 1.5 + Math.random() * 3,
       walkSpeed: 2.2 + Math.random() * 0.8,
-      runSpeed: isPolice ? 7.6 : 6.4,
+      runSpeed: isPolice ? 7.8 : 6.5,
       vy: 0,
       jumpCooldown: 1 + Math.random() * 2,
-      attackCooldown: 0
+      attackCooldown: 0,
+      shootCooldown: 0.6 + Math.random() * 0.6
     };
 
     this.npcs.push(npc);
@@ -57,11 +59,13 @@ export class NpcManager {
     for (const npc of this.npcs) {
       if (npc.dead) continue;
       const dist = npc.mesh.position.distanceTo(origin);
-      if (dist < 38) {
+      if (dist < 42) {
         if (npc.isPolice || wantedLevel >= 2) {
           npc.state = 'chase';
+          npc.stateTimer = 8;
         } else {
-          npc.state = 'flee';
+          npc.state = Math.random() < 0.35 ? 'cower' : 'flee';
+          npc.stateTimer = 4 + Math.random() * 3;
           const away = npc.mesh.position.clone().sub(playerPos);
           npc.dirAngle = Math.atan2(away.x, away.z);
         }
@@ -72,20 +76,32 @@ export class NpcManager {
   damageNpc(npc, amount, knockDir, onKill) {
     if (npc.dead) return;
     npc.hp -= amount;
+    npc.mesh.userData.triggerHitReact();
+
     if (knockDir) {
-      npc.mesh.position.addScaledVector(knockDir, 0.55);
+      const nextP = npc.mesh.position.clone().addScaledVector(knockDir, 0.35);
+      if (!this.collidesAt(nextP, 0.42)) {
+        npc.mesh.position.x = nextP.x;
+        npc.mesh.position.z = nextP.z;
+      }
     }
 
     if (npc.hp <= 0) {
       npc.dead = true;
-      npc.respawnTimer = 16;
+      npc.respawnTimer = 18;
       npc.vy = 0;
       npc.mesh.rotation.x = -Math.PI / 2;
       npc.mesh.position.y = 0.22;
       if (onKill) onKill(npc, knockDir);
     } else {
-      // Zərbə alan NPC ya qaçır, ya da yaxındırsa vurmağa çalışır
-      npc.state = npc.isPolice ? 'chase' : (Math.random() < 0.35 ? 'chase' : 'flee');
+      // Bir vuruşda ölmür: ya sarsılır/qorxur, ya qaçır, ya da təqib/atəş edir
+      if (npc.isPolice) {
+        npc.state = 'chase';
+        npc.stateTimer = 10;
+      } else {
+        npc.state = Math.random() < 0.45 ? 'cower' : 'flee';
+        npc.stateTimer = 3.5 + Math.random() * 2.5;
+      }
     }
   }
 
@@ -95,8 +111,9 @@ export class NpcManager {
         npc.respawnTimer -= dt;
         if (npc.respawnTimer <= 0) {
           npc.dead = false;
-          npc.hp = npc.isPolice ? 150 : 100;
+          npc.hp = npc.isPolice ? 160 : 100;
           npc.state = npc.isPolice && wantedLevel > 0 ? 'chase' : 'walk';
+          npc.stateTimer = 2 + Math.random() * 3;
           npc.mesh.rotation.x = 0;
           npc.mesh.position.copy(npc.spawnPos);
         }
@@ -104,45 +121,69 @@ export class NpcManager {
       }
 
       if (npc.attackCooldown > 0) npc.attackCooldown -= dt;
+      if (npc.shootCooldown > 0) npc.shootCooldown -= dt;
       npc.jumpCooldown -= dt;
+      npc.stateTimer -= dt;
 
-      const distToPlayer = npc.mesh.position.distanceTo(playerPos);
+      const toPlayer = playerPos.clone().sub(npc.mesh.position);
+      toPlayer.y = 0;
+      const distToPlayer = toPlayer.length();
+
       let isAttacking = false;
-      let moveSpeed = npc.walkSpeed;
-      let speedRatio = 0.45;
+      let isAiming = false;
+      let isCowering = false;
+      let moveSpeed = 0;
+      let speedRatio = 0;
 
-      if (npc.isPolice && wantedLevel > 0 && distToPlayer < 45) {
+      if (npc.isPolice && wantedLevel > 0 && distToPlayer < 52) {
         npc.state = 'chase';
-      } else if (npc.state === 'chase' && (wantedLevel === 0 || distToPlayer > 50)) {
+      } else if (npc.state === 'chase' && (wantedLevel === 0 || distToPlayer > 60)) {
         npc.state = 'walk';
-      } else if (npc.state === 'flee' && distToPlayer > 35) {
+        npc.stateTimer = 2.5;
+      } else if ((npc.state === 'flee' || npc.state === 'cower') && npc.stateTimer <= 0) {
         npc.state = 'walk';
+        npc.stateTimer = 3 + Math.random() * 3;
       }
 
-      if (npc.state === 'chase' && !playerInCar) {
-        const toPlayer = playerPos.clone().sub(npc.mesh.position);
-        toPlayer.y = 0;
-        const d = toPlayer.length();
-        if (d > 0.01) {
-          toPlayer.normalize();
-          npc.dirAngle = Math.atan2(toPlayer.x, toPlayer.z);
+      if (npc.state === 'chase') {
+        if (distToPlayer > 0.01) {
+          const dir = toPlayer.clone().normalize();
+          npc.dirAngle = Math.atan2(dir.x, dir.z);
           npc.mesh.rotation.y = npc.dirAngle;
         }
 
-        if (d < 1.85) {
-          // Vurma animasiyası və zərbə
+        if (npc.isPolice && distToPlayer < 26) {
+          // Polis silahla atəş açır və yaxınlaşır
+          isAiming = true;
+          moveSpeed = distToPlayer > 7 ? npc.runSpeed * 0.7 : 0;
+          speedRatio = moveSpeed > 0 ? 0.8 : 0;
+
+          if (npc.shootCooldown <= 0) {
+            npc.shootCooldown = 0.85 + Math.random() * 0.45;
+            const muzzle = npc.mesh.position.clone().add(new THREE.Vector3(0, 1.35, 0));
+            const targetPt = playerPos.clone().add(new THREE.Vector3(0, 1.15, 0));
+            if (this.onShootTracer) this.onShootTracer(muzzle, targetPt);
+            if (!playerInCar && distToPlayer < 25 && onPlayerHit) {
+              onPlayerHit(10);
+            }
+          }
+        } else if (!playerInCar && distToPlayer < 1.85) {
           moveSpeed = 0;
           speedRatio = 0;
           if (npc.attackCooldown <= 0) {
             npc.attackCooldown = 1.05;
             isAttacking = true;
             npc.mesh.userData.triggerAttack();
-            if (onPlayerHit) onPlayerHit(npc.isPolice ? 12 : 8);
+            if (onPlayerHit) onPlayerHit(npc.isPolice ? 12 : 7);
           }
         } else {
           moveSpeed = npc.runSpeed;
           speedRatio = 1.0;
         }
+      } else if (npc.state === 'cower') {
+        isCowering = true;
+        moveSpeed = 0;
+        speedRatio = 0;
       } else if (npc.state === 'flee') {
         const away = npc.mesh.position.clone().sub(playerPos);
         away.y = 0;
@@ -153,17 +194,28 @@ export class NpcManager {
         moveSpeed = npc.runSpeed;
         speedRatio = 1.0;
       } else {
-        // Normal yerimə
-        npc.turnTimer -= dt;
-        if (npc.turnTimer <= 0) {
-          npc.dirAngle += (Math.random() - 0.5) * 2.2;
-          npc.turnTimer = 2 + Math.random() * 3.5;
+        // Normal gəzinti və yerində fasilə (idle hərəkətləri ilə)
+        if (npc.stateTimer <= 0) {
+          if (npc.state === 'walk') {
+            npc.state = Math.random() < 0.45 ? 'idle' : 'walk';
+            npc.stateTimer = npc.state === 'idle' ? (1.5 + Math.random() * 2.5) : (2.5 + Math.random() * 4);
+            npc.dirAngle += (Math.random() - 0.5) * 2.2;
+          } else {
+            npc.state = 'walk';
+            npc.stateTimer = 2.5 + Math.random() * 4;
+            npc.dirAngle += (Math.random() - 0.5) * 2.4;
+          }
         }
-        moveSpeed = npc.walkSpeed;
-        speedRatio = 0.45;
+
+        if (npc.state === 'walk') {
+          moveSpeed = npc.walkSpeed;
+          speedRatio = 0.45;
+        } else {
+          moveSpeed = 0;
+          speedRatio = 0;
+        }
       }
 
-      // Tullanma (qaçarkən/təqib edərkən və ya maneə qarşısında)
       const isGrounded = npc.mesh.position.y <= 0.001 && npc.vy === 0;
       if (isGrounded && npc.jumpCooldown <= 0 && (npc.state === 'flee' || npc.state === 'chase')) {
         npc.vy = 6.2;
@@ -188,7 +240,7 @@ export class NpcManager {
           npc.mesh.position.z = nextPos.z;
           npc.mesh.rotation.y = npc.dirAngle;
         } else {
-          npc.dirAngle += Math.PI * 0.7;
+          npc.dirAngle += Math.PI * 0.75;
           if (isGrounded) npc.vy = 5.5;
         }
       }
@@ -196,12 +248,14 @@ export class NpcManager {
       npc.mesh.userData.updatePose(dt, {
         speedRatio,
         isAirborne: npc.mesh.position.y > 0.02,
-        isAttacking
+        isAttacking,
+        isAiming,
+        isCowering
       });
 
       // Maşınla vurulma
       for (const car of cars) {
-        if (Math.abs(car.userData.speed) > 4.5) {
+        if (Math.abs(car.userData.speed) > 5.0) {
           const dist = npc.mesh.position.distanceTo(car.position);
           if (dist < 2.4) {
             const knock = npc.mesh.position.clone().sub(car.position);
